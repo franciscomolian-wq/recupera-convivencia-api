@@ -1,0 +1,146 @@
+// Esquema de datos — Recupera Convivencia
+// Base de datos: PostgreSQL (Railway)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  superadmin
+  coordinador
+  director
+  sostenedor
+  superintendencia
+  docente
+  apoderado
+}
+
+enum Level {
+  parvulo
+  basica
+  media
+  adultos
+}
+
+model Establishment {
+  id            String   @id @default(cuid())
+  name          String
+  comuna        String?
+  type          Level    @default(basica)
+  sostenedor    String?
+  students      Int      @default(0)
+  ufPerStudent  Float    @default(0.05)
+  paidUF        Float    @default(0)
+  cumplimiento  Int      @default(100)
+  createdAt     DateTime @default(now())
+
+  users         User[]
+  cases         Case[]
+  payments      Payment[]
+  notifications Notification[]
+}
+
+model User {
+  id              String   @id @default(cuid())
+  name            String
+  email           String   @unique
+  passwordHash    String
+  role            Role     @default(docente)
+  establishment   Establishment? @relation(fields: [establishmentId], references: [id])
+  establishmentId String?
+  createdAt       DateTime @default(now())
+}
+
+model Case {
+  id              String   @id @default(cuid())
+  code            String   @unique          // ej. RC-2026-014
+  typeKey         String
+  studentLabel    String
+  level           Level?
+  relato          String?
+  currentStepIdx  Int      @default(0)
+  autoEmails      Boolean  @default(false)
+  establishment   Establishment? @relation(fields: [establishmentId], references: [id])
+  establishmentId String?
+  createdAt       DateTime @default(now())
+
+  steps         Step[]
+  evidence      Evidence[]
+  derivations   Derivation[]
+  emails        EmailLog[]
+}
+
+model Step {
+  id       String   @id @default(cuid())
+  case     Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId   String
+  order    Int
+  title    String
+  role     String?
+  basis    String?
+  due      DateTime?
+  done     Boolean  @default(false)
+}
+
+model Evidence {
+  id        String   @id @default(cuid())
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId    String
+  stepOrder Int?
+  type      String
+  name      String
+  url       String?
+  createdAt DateTime @default(now())
+}
+
+model Derivation {
+  id        String   @id @default(cuid())
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId    String
+  label     String
+  email     String
+  createdAt DateTime @default(now())
+}
+
+model EmailLog {
+  id       String   @id @default(cuid())
+  case     Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId   String
+  to       String
+  subject  String
+  at       DateTime @default(now())
+}
+
+model Institution {
+  id    String @id @default(cuid())
+  label String
+  type  String?
+  email String?
+}
+
+model Payment {
+  id              String   @id @default(cuid())
+  establishment   Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  establishmentId String
+  periodo         String   // ej. 2026-08
+  totalUF         Float
+  paidUF          Float    @default(0)
+  status          String   @default("adeudado")
+  at              DateTime @default(now())
+}
+
+model Notification {
+  id              String   @id @default(cuid())
+  from            String
+  title           String
+  body            String?
+  establishment   Establishment? @relation(fields: [establishmentId], references: [id])
+  establishmentId String?          // null = difusión a todos
+  read            Boolean  @default(false)
+  at              DateTime @default(now())
+}
