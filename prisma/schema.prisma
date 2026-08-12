@@ -1,5 +1,6 @@
 // Esquema de datos — Recupera Convivencia
-// Base de datos: PostgreSQL (Railway)
+// Portable: SQLite en desarrollo/local, PostgreSQL en producción (Railway).
+// -> Para producción, cambiar el provider de "sqlite" a "postgresql".
 
 generator client {
   provider = "prisma-client-js"
@@ -10,39 +11,22 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  superadmin
-  coordinador
-  director
-  sostenedor
-  superintendencia
-  docente
-  apoderado
-}
-
-enum Level {
-  parvulo
-  basica
-  media
-  adultos
-}
-
 model Establishment {
-  id            String   @id @default(cuid())
-  name          String
-  comuna        String?
-  type          Level    @default(basica)
-  sostenedor    String?
-  students      Int      @default(0)
-  ufPerStudent  Float    @default(0.05)
-  paidUF        Float    @default(0)
-  cumplimiento  Int      @default(100)
-  createdAt     DateTime @default(now())
+  id           String   @id @default(cuid())
+  name         String
+  comuna       String?
+  type         String   @default("basica") // parvulo | basica | media | adultos
+  sostenedor   String?
+  students     Int      @default(0)
+  ufPerStudent Float    @default(0.05)
+  paidUF       Float    @default(0)
+  cumplimiento Int      @default(100)
+  createdAt    DateTime @default(now())
 
-  users         User[]
-  cases         Case[]
-  payments      Payment[]
-  notifications Notification[]
+  users       User[]
+  cases       Case[]
+  studentList Student[]
+  payments    Payment[]
 }
 
 model User {
@@ -50,41 +34,70 @@ model User {
   name            String
   email           String   @unique
   passwordHash    String
-  role            Role     @default(docente)
+  role            String   @default("docente") // superadmin | coordinador | director | ...
   establishment   Establishment? @relation(fields: [establishmentId], references: [id])
   establishmentId String?
   createdAt       DateTime @default(now())
+}
+
+model Student {
+  id              String   @id @default(cuid())
+  name            String
+  curso           String?
+  nivel           String?
+  apoderadoNombre String?
+  apoderadoEmail  String?
+  establishment   Establishment? @relation(fields: [establishmentId], references: [id])
+  establishmentId String?
+  createdAt       DateTime @default(now())
+
+  cases        Case[]
+  entrevistas  Entrevista[]
+  citaciones   Citacion[]
+  compromisos  Compromiso[]
+  medidas      Medida[]
 }
 
 model Case {
-  id              String   @id @default(cuid())
-  code            String   @unique          // ej. RC-2026-014
-  typeKey         String
-  studentLabel    String
-  level           Level?
-  relato          String?
-  currentStepIdx  Int      @default(0)
-  autoEmails      Boolean  @default(false)
-  establishment   Establishment? @relation(fields: [establishmentId], references: [id])
+  id             String   @id @default(cuid())
+  code           String   @unique
+  typeKey        String
+  studentLabel   String
+  level          String?
+  relato         String?
+  curso          String?
+  fechaHecho     String?
+  hora           String?
+  lugar          String?
+  testigos       String?
+  adultosRef     String?
+  currentStepIdx Int      @default(0)
+  autoEmails     Boolean  @default(false)
+  closed         Boolean  @default(false)
+  closedAt       DateTime?
+  closeSummary   String?
+  student        Student? @relation(fields: [studentId], references: [id])
+  studentId      String?
+  establishment  Establishment? @relation(fields: [establishmentId], references: [id])
   establishmentId String?
-  createdAt       DateTime @default(now())
+  createdAt      DateTime @default(now())
 
-  steps         Step[]
-  evidence      Evidence[]
-  derivations   Derivation[]
-  emails        EmailLog[]
+  steps       Step[]
+  evidence    Evidence[]
+  derivations Derivation[]
+  emails      EmailLog[]
 }
 
 model Step {
-  id       String   @id @default(cuid())
-  case     Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  caseId   String
-  order    Int
-  title    String
-  role     String?
-  basis    String?
-  due      DateTime?
-  done     Boolean  @default(false)
+  id     String   @id @default(cuid())
+  case   Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId String
+  order  Int
+  title  String
+  role   String?
+  basis  String?
+  due    DateTime?
+  done   Boolean  @default(false)
 }
 
 model Evidence {
@@ -108,16 +121,57 @@ model Derivation {
 }
 
 model EmailLog {
-  id       String   @id @default(cuid())
-  case     Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  caseId   String
-  to       String
-  subject  String
-  at       DateTime @default(now())
+  id      String   @id @default(cuid())
+  case    Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId  String
+  to      String
+  subject String
+  at      DateTime @default(now())
+}
+
+model Entrevista {
+  id        String   @id @default(cuid())
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  fecha     String?
+  con       String?
+  resumen   String?
+  foto      String?
+  createdAt DateTime @default(now())
+}
+
+model Citacion {
+  id        String   @id @default(cuid())
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  fecha     String?
+  motivo    String?
+  estado    String   @default("Asiste")
+  excusa    String?
+  createdAt DateTime @default(now())
+}
+
+model Compromiso {
+  id        String   @id @default(cuid())
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  texto     String
+  cumplido  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Medida {
+  id          String   @id @default(cuid())
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId   String
+  tipo        String   @default("formativa")
+  descripcion String
+  fecha       String?
+  createdAt   DateTime @default(now())
 }
 
 model Institution {
-  id    String @id @default(cuid())
+  id    String  @id @default(cuid())
   label String
   type  String?
   email String?
@@ -127,7 +181,7 @@ model Payment {
   id              String   @id @default(cuid())
   establishment   Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
   establishmentId String
-  periodo         String   // ej. 2026-08
+  periodo         String
   totalUF         Float
   paidUF          Float    @default(0)
   status          String   @default("adeudado")
@@ -139,8 +193,7 @@ model Notification {
   from            String
   title           String
   body            String?
-  establishment   Establishment? @relation(fields: [establishmentId], references: [id])
-  establishmentId String?          // null = difusión a todos
+  establishmentId String?
   read            Boolean  @default(false)
   at              DateTime @default(now())
 }

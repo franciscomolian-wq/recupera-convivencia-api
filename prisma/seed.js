@@ -19,6 +19,29 @@ async function main() {
     ],
   });
 
+  // Estudiante con expediente + un caso
+  const s1 = await prisma.student.create({
+    data: {
+      name: "Estudiante J. M.", curso: "7°B", nivel: "basica", establishmentId: e1.id,
+      apoderadoNombre: "María (apoderada de J.M.)", apoderadoEmail: "apoderado.jm@correo.cl",
+      entrevistas: { create: [{ fecha: "2026-06-30", con: "Apoderado/a", resumen: "Se informa la situación y se acuerdan medidas." }] },
+      compromisos: { create: [{ texto: "Asistir a talleres de habilidades sociales", cumplido: false }] },
+      medidas: { create: [{ tipo: "formativa", descripcion: "Mediación entre pares", fecha: "2026-07-06" }] },
+    },
+  });
+
+  await prisma.case.create({
+    data: {
+      code: "RC-2026-014", typeKey: "bullying", studentLabel: "Estudiante 7°B (iniciales J.M.)",
+      level: "basica", curso: "7°B", studentId: s1.id, establishmentId: e1.id, currentStepIdx: 2,
+      steps: { create: [
+        { order: 0, title: "Acogida y registro confidencial de la denuncia", role: "Coordinador de Convivencia", basis: "Ley 21.809", done: true },
+        { order: 1, title: "Evaluación de riesgo y medidas de resguardo", role: "Coordinador de Convivencia", basis: "Ley 21.809", done: true },
+        { order: 2, title: "Entrevistas a involucrados", role: "Equipo de Convivencia", basis: "Ley 21.809", done: false },
+      ] },
+    },
+  });
+
   console.log("Seed listo. Usuarios demo (password: demo1234): admin@recupera.cl / coordinacion@recupera.cl");
 }
 

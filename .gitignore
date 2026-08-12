@@ -4,3 +4,8 @@ node_modules/
 !.env.example
 *.log
 .DS_Store
+
+# Base local SQLite
+*.db
+*.db-journal
+prisma/dev.db*

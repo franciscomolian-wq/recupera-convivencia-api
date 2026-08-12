@@ -5,6 +5,7 @@ import morgan from "morgan";
 import { authRouter } from "./routes/auth.js";
 import { establishmentsRouter } from "./routes/establishments.js";
 import { casesRouter } from "./routes/cases.js";
+import { studentsRouter } from "./routes/students.js";
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.get("/health", (req, res) => res.json({ status: "ok", time: new Date().toISO
 app.use("/api/auth", authRouter);
 app.use("/api/establishments", establishmentsRouter);
 app.use("/api/cases", casesRouter);
+app.use("/api/students", studentsRouter);
 
 // Manejo de errores
 app.use((err, req, res, next) => {
