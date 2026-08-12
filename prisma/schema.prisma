@@ -27,6 +27,7 @@ model Establishment {
   cases       Case[]
   studentList Student[]
   payments    Payment[]
+  orgRecords  OrgRecord[]
 }
 
 model User {
@@ -61,6 +62,7 @@ model Student {
   citaciones   Citacion[]
   compromisos  Compromiso[]
   medidas      Medida[]
+  records      StudentRecord[]
 }
 
 model Case {
@@ -191,6 +193,28 @@ model Payment {
   paidUF          Float    @default(0)
   status          String   @default("adeudado")
   at              DateTime @default(now())
+}
+
+// Registro genérico ligado a un estudiante (inspectoría, PIE, apoderados).
+// kind: anotacion|suspension|atraso|retiro|nee|pieInforme|adecuacion|estrategia|reunionPie|citacionApo|acuerdoApo|docApo
+model StudentRecord {
+  id        String   @id @default(cuid())
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  kind      String
+  data      Json
+  createdAt DateTime @default(now())
+}
+
+// Registro genérico a nivel establecimiento (mensajes, agenda, gestiones, documental, PME).
+// kind: message|event|gestion|document|accion
+model OrgRecord {
+  id              String   @id @default(cuid())
+  establishment   Establishment? @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  establishmentId String?
+  kind            String
+  data            Json
+  createdAt       DateTime @default(now())
 }
 
 model Notification {

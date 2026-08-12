@@ -15,6 +15,7 @@ const withRecords = {
   citaciones: { orderBy: { createdAt: "asc" } },
   compromisos: { orderBy: { createdAt: "asc" } },
   medidas: { orderBy: { createdAt: "asc" } },
+  records: { orderBy: { createdAt: "asc" } },
 };
 
 // Listar expedientes (con sus registros, para hidratar la UI de una vez)
@@ -81,6 +82,24 @@ studentsRouter.patch("/compromisos/:cid", auth, async (req, res) => {
 studentsRouter.post("/:id/medidas", auth, async (req, res) => {
   const r = await prisma.medida.create({ data: { studentId: req.params.id, ...pick(req.body, ["tipo", "descripcion", "fecha"]) } });
   res.status(201).json(r);
+});
+
+// --- Registros genéricos del expediente (inspectoría, PIE, apoderados) ---
+studentsRouter.post("/:id/records", auth, async (req, res) => {
+  const { kind, data } = req.body || {};
+  if (!kind) return res.status(400).json({ error: "kind es obligatorio." });
+  const r = await prisma.studentRecord.create({ data: { studentId: req.params.id, kind, data: data || {} } });
+  res.status(201).json(r);
+});
+studentsRouter.patch("/records/:rid", auth, async (req, res) => {
+  const cur = await prisma.studentRecord.findUnique({ where: { id: req.params.rid } });
+  if (!cur) return res.status(404).json({ error: "Registro no encontrado." });
+  const r = await prisma.studentRecord.update({ where: { id: req.params.rid }, data: { data: { ...cur.data, ...(req.body.data || {}) } } });
+  res.json(r);
+});
+studentsRouter.delete("/records/:rid", auth, async (req, res) => {
+  try { await prisma.studentRecord.delete({ where: { id: req.params.rid } }); res.json({ ok: true }); }
+  catch { res.status(404).json({ error: "Registro no encontrado." }); }
 });
 
 function pick(obj, keys) {
