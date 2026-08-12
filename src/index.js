@@ -6,6 +6,7 @@ import { authRouter } from "./routes/auth.js";
 import { establishmentsRouter } from "./routes/establishments.js";
 import { casesRouter } from "./routes/cases.js";
 import { studentsRouter } from "./routes/students.js";
+import { usersRouter } from "./routes/users.js";
 
 const app = express();
 
@@ -25,6 +26,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/establishments", establishmentsRouter);
 app.use("/api/cases", casesRouter);
 app.use("/api/students", studentsRouter);
+app.use("/api/users", usersRouter);
 
 // Manejo de errores
 app.use((err, req, res, next) => {

@@ -34,10 +34,12 @@ model User {
   name            String
   rut             String?  @unique  // identificador de acceso (RUT chileno, normalizado sin puntos ni guion)
   email           String?  @unique  // opcional (notificaciones); el login es por RUT
-  passwordHash    String
+  passwordHash    String?  // nulo hasta que la persona activa su cuenta con el link de invitación
   role            String   @default("docente") // superadmin | coordinador | director | ...
   totpSecret      String?  // secreto TOTP (Google Authenticator); pendiente hasta activar
   totpEnabled     Boolean  @default(false)
+  inviteToken     String?  @unique  // token del enlace de invitación (se limpia al activar)
+  inviteExpires   DateTime? // vencimiento del enlace de invitación
   establishment   Establishment? @relation(fields: [establishmentId], references: [id])
   establishmentId String?
   createdAt       DateTime @default(now())

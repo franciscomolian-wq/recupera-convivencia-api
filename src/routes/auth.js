@@ -51,6 +51,7 @@ authRouter.post("/login", async (req, res) => {
     return res.status(400).json({ error: "Ingresa tu RUT y tu contraseña." });
   const user = await prisma.user.findUnique({ where: { rut: normalizeRut(rut) } });
   if (!user) return res.status(401).json({ error: "Credenciales inválidas." });
+  if (!user.passwordHash) return res.status(401).json({ error: "Esta cuenta aún no está activada. Usa el enlace de invitación que recibiste." });
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) return res.status(401).json({ error: "Credenciales inválidas." });
 
@@ -62,6 +63,32 @@ authRouter.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Código de verificación inválido.", twofa: true });
   }
   res.json({ token: signToken(user), user: publicUser(user) });
+});
+
+// Info pública de un enlace de invitación (para la pantalla de activación)
+authRouter.get("/invite/:token", async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { inviteToken: req.params.token } });
+  if (!user) return res.status(404).json({ error: "El enlace de invitación no es válido." });
+  if (user.inviteExpires && user.inviteExpires < new Date())
+    return res.status(410).json({ error: "El enlace de invitación expiró. Solicita uno nuevo." });
+  res.json({ name: user.name, rut: user.rut ? formatRut(user.rut) : null, role: user.role });
+});
+
+// Activar cuenta: la persona define su contraseña con el token del enlace
+authRouter.post("/activate", async (req, res) => {
+  const { token, password } = req.body || {};
+  if (!token || !password) return res.status(400).json({ error: "Faltan datos para activar la cuenta." });
+  if (String(password).length < 8) return res.status(400).json({ error: "La contraseña debe tener al menos 8 caracteres." });
+  const user = await prisma.user.findUnique({ where: { inviteToken: token } });
+  if (!user) return res.status(404).json({ error: "El enlace de invitación no es válido." });
+  if (user.inviteExpires && user.inviteExpires < new Date())
+    return res.status(410).json({ error: "El enlace de invitación expiró. Solicita uno nuevo." });
+  const passwordHash = await bcrypt.hash(password, 10);
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash, inviteToken: null, inviteExpires: null },
+  });
+  res.json({ token: signToken(updated), user: publicUser(updated) });
 });
 
 // Perfil del usuario autenticado (fresco desde la BD)
