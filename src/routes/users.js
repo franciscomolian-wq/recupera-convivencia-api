@@ -52,6 +52,17 @@ usersRouter.post("/invite", auth, canManage, async (req, res) => {
   res.status(201).json({ user: publicUser(user), inviteUrl, expiresAt: inviteExpires });
 });
 
+// Eliminar un usuario (no puedes eliminar tu propia cuenta)
+usersRouter.delete("/:id", auth, canManage, async (req, res) => {
+  if (req.params.id === req.user.id) return res.status(400).json({ error: "No puedes eliminar tu propia cuenta." });
+  try {
+    await prisma.user.delete({ where: { id: req.params.id } });
+    res.json({ ok: true });
+  } catch {
+    res.status(404).json({ error: "Usuario no encontrado." });
+  }
+});
+
 // Regenerar el enlace de invitación de un usuario aún no activado
 usersRouter.post("/:id/reinvite", auth, canManage, async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.params.id } });

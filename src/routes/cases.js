@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
-import { auth } from "../middleware/auth.js";
+import { auth, requireRole } from "../middleware/auth.js";
 
 export const casesRouter = Router();
+const canManage = requireRole("superadmin", "coordinador", "director");
 
 // Filtra por establecimiento salvo súper admin. Apoderado solo sus casos (pendiente enlazar).
 function scopeFilter(user) {
@@ -51,6 +52,16 @@ casesRouter.post("/:id/close", auth, async (req, res) => {
     include: CASE_INCLUDE,
   });
   res.json(c);
+});
+
+// Eliminar caso (arrastra pasos, evidencia, derivaciones y correos por cascada)
+casesRouter.delete("/:id", auth, canManage, async (req, res) => {
+  try {
+    await prisma.case.delete({ where: { id: req.params.id } });
+    res.json({ ok: true });
+  } catch {
+    res.status(404).json({ error: "Caso no encontrado." });
+  }
 });
 
 // Adjuntar evidencia (metadatos)

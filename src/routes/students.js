@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
-import { auth } from "../middleware/auth.js";
+import { auth, requireRole } from "../middleware/auth.js";
 
 export const studentsRouter = Router();
+const canManage = requireRole("superadmin", "coordinador", "director");
 
 function scope(user) {
   return user.role === "superadmin" ? {} : { establishmentId: user.establishmentId || "" };
@@ -44,6 +45,18 @@ studentsRouter.patch("/:id", auth, async (req, res) => {
   const { name, curso, nivel, apoderadoNombre, apoderadoEmail } = req.body || {};
   const s = await prisma.student.update({ where: { id: req.params.id }, data: { name, curso, nivel, apoderadoNombre, apoderadoEmail } });
   res.json(s);
+});
+
+// Eliminar expediente (bloquea si tiene casos asociados)
+studentsRouter.delete("/:id", auth, canManage, async (req, res) => {
+  const casos = await prisma.case.count({ where: { studentId: req.params.id } });
+  if (casos > 0) return res.status(409).json({ error: "El estudiante tiene casos asociados. Elimínalos primero." });
+  try {
+    await prisma.student.delete({ where: { id: req.params.id } });
+    res.json({ ok: true });
+  } catch {
+    res.status(404).json({ error: "Expediente no encontrado." });
+  }
 });
 
 // Agregar registros del expediente
