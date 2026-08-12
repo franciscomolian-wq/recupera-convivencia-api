@@ -53,6 +53,8 @@ model Student {
   nivel           String?
   apoderadoNombre String?
   apoderadoEmail  String?
+  nee             Boolean  @default(false)  // Necesidades Educativas Especiales (PIE)
+  neeTipo         String?
   establishment   Establishment? @relation(fields: [establishmentId], references: [id])
   establishmentId String?
   createdAt       DateTime @default(now())

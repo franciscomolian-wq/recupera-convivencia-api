@@ -43,8 +43,8 @@ studentsRouter.post("/", auth, async (req, res) => {
 
 // Actualizar
 studentsRouter.patch("/:id", auth, async (req, res) => {
-  const { name, curso, nivel, apoderadoNombre, apoderadoEmail } = req.body || {};
-  const s = await prisma.student.update({ where: { id: req.params.id }, data: { name, curso, nivel, apoderadoNombre, apoderadoEmail } });
+  const data = pick(req.body, ["name", "curso", "nivel", "apoderadoNombre", "apoderadoEmail", "nee", "neeTipo"]);
+  const s = await prisma.student.update({ where: { id: req.params.id }, data });
   res.json(s);
 });
 
