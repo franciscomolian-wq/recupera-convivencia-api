@@ -5,10 +5,14 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
-  // Idempotente: si ya existe el admin demo, no volver a sembrar.
+  // Auto-reparación: si los usuarios demo venían de un seed anterior sin RUT, se lo asignamos.
+  await prisma.user.updateMany({ where: { email: "admin@recupera.cl" }, data: { rut: "111111111" } });
+  await prisma.user.updateMany({ where: { email: "coordinacion@recupera.cl" }, data: { rut: "222222222" } });
+
+  // Idempotente: si ya existe el admin demo, no volver a sembrar el resto.
   const yaExiste = await prisma.user.findUnique({ where: { email: "admin@recupera.cl" } });
   if (yaExiste) {
-    console.log("Seed omitido: los datos demo ya existen.");
+    console.log("Seed omitido: los datos demo ya existen (RUT verificado).");
     return;
   }
 
@@ -17,12 +21,12 @@ async function main() {
     data: { name: "Liceo Ejemplo", comuna: "Quilpué", type: "media", sostenedor: "Corp. Municipal Quilpué", students: 820, ufPerStudent: 0.05, paidUF: 41, cumplimiento: 82 },
   });
 
-  // Súper admin + coordinadora demo
+  // Súper admin + coordinadora demo (login por RUT, password demo1234)
   const pass = await bcrypt.hash("demo1234", 10);
   await prisma.user.createMany({
     data: [
-      { name: "Administración Central", email: "admin@recupera.cl", passwordHash: pass, role: "superadmin" },
-      { name: "Camila Coordinadora", email: "coordinacion@recupera.cl", passwordHash: pass, role: "coordinador", establishmentId: e1.id },
+      { name: "Administración Central", rut: "111111111", email: "admin@recupera.cl", passwordHash: pass, role: "superadmin" },
+      { name: "Camila Coordinadora", rut: "222222222", email: "coordinacion@recupera.cl", passwordHash: pass, role: "coordinador", establishmentId: e1.id },
     ],
   });
 

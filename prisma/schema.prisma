@@ -32,9 +32,12 @@ model Establishment {
 model User {
   id              String   @id @default(cuid())
   name            String
-  email           String   @unique
+  rut             String?  @unique  // identificador de acceso (RUT chileno, normalizado sin puntos ni guion)
+  email           String?  @unique  // opcional (notificaciones); el login es por RUT
   passwordHash    String
   role            String   @default("docente") // superadmin | coordinador | director | ...
+  totpSecret      String?  // secreto TOTP (Google Authenticator); pendiente hasta activar
+  totpEnabled     Boolean  @default(false)
   establishment   Establishment? @relation(fields: [establishmentId], references: [id])
   establishmentId String?
   createdAt       DateTime @default(now())
