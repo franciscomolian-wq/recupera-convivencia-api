@@ -16,9 +16,9 @@ const withRecords = {
   medidas: { orderBy: { createdAt: "asc" } },
 };
 
-// Listar expedientes
+// Listar expedientes (con sus registros, para hidratar la UI de una vez)
 studentsRouter.get("/", auth, async (req, res) => {
-  const items = await prisma.student.findMany({ where: scope(req.user), include: { cases: true }, orderBy: { name: "asc" } });
+  const items = await prisma.student.findMany({ where: scope(req.user), include: withRecords, orderBy: { name: "asc" } });
   res.json(items);
 });
 
