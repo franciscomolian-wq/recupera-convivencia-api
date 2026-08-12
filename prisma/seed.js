@@ -5,6 +5,13 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
+  // Idempotente: si ya existe el admin demo, no volver a sembrar.
+  const yaExiste = await prisma.user.findUnique({ where: { email: "admin@recupera.cl" } });
+  if (yaExiste) {
+    console.log("Seed omitido: los datos demo ya existen.");
+    return;
+  }
+
   // Establecimiento demo
   const e1 = await prisma.establishment.create({
     data: { name: "Liceo Ejemplo", comuna: "Quilpué", type: "media", sostenedor: "Corp. Municipal Quilpué", students: 820, ufPerStudent: 0.05, paidUF: 41, cumplimiento: 82 },
