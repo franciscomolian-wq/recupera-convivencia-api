@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { prisma } from "../db.js";
 import { auth, requireRole } from "../middleware/auth.js";
 import { normalizeRut, isValidRut, formatRut } from "../lib/rut.js";
+import { sendInviteEmail, mailerConfigured } from "../lib/mailer.js";
 
 export const usersRouter = Router();
 
@@ -49,7 +50,8 @@ usersRouter.post("/invite", auth, canManage, async (req, res) => {
     data: { name, rut: nrut, email: email || null, role, establishmentId, inviteToken, inviteExpires },
   });
   const inviteUrl = `${APP_URL}/?invite=${inviteToken}`;
-  res.status(201).json({ user: publicUser(user), inviteUrl, expiresAt: inviteExpires });
+  const mail = email ? await sendInviteEmail({ to: email, name, inviteUrl }) : { sent: false, reason: "no-email" };
+  res.status(201).json({ user: publicUser(user), inviteUrl, expiresAt: inviteExpires, emailSent: mail.sent, mailerConfigured: mailerConfigured() });
 });
 
 // Eliminar un usuario (no puedes eliminar tu propia cuenta)
@@ -71,5 +73,7 @@ usersRouter.post("/:id/reinvite", auth, canManage, async (req, res) => {
   const inviteToken = crypto.randomBytes(24).toString("hex");
   const inviteExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   await prisma.user.update({ where: { id: user.id }, data: { inviteToken, inviteExpires } });
-  res.json({ inviteUrl: `${APP_URL}/?invite=${inviteToken}`, expiresAt: inviteExpires });
+  const inviteUrl = `${APP_URL}/?invite=${inviteToken}`;
+  const mail = user.email ? await sendInviteEmail({ to: user.email, name: user.name, inviteUrl }) : { sent: false, reason: "no-email" };
+  res.json({ inviteUrl, expiresAt: inviteExpires, emailSent: mail.sent, mailerConfigured: mailerConfigured() });
 });
