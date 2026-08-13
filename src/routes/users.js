@@ -54,6 +54,21 @@ usersRouter.post("/invite", auth, canManage, async (req, res) => {
   res.status(201).json({ user: publicUser(user), inviteUrl, expiresAt: inviteExpires, emailSent: mail.sent, mailerConfigured: mailerConfigured() });
 });
 
+// Editar un usuario (nombre, correo, rol)
+usersRouter.patch("/:id", auth, canManage, async (req, res) => {
+  const { name, email, role } = req.body || {};
+  const data = {};
+  if (name !== undefined) data.name = name;
+  if (email !== undefined) data.email = email || null;
+  if (role !== undefined) data.role = role;
+  try {
+    const user = await prisma.user.update({ where: { id: req.params.id }, data });
+    res.json(publicUser(user));
+  } catch {
+    res.status(404).json({ error: "Usuario no encontrado." });
+  }
+});
+
 // Eliminar un usuario (no puedes eliminar tu propia cuenta)
 usersRouter.delete("/:id", auth, canManage, async (req, res) => {
   if (req.params.id === req.user.id) return res.status(400).json({ error: "No puedes eliminar tu propia cuenta." });
