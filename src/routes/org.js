@@ -28,16 +28,25 @@ orgRouter.post("/records", auth, async (req, res) => {
   res.status(201).json(r);
 });
 
+// Verifica que el registro sea del establecimiento del usuario (o global, o súper admin).
+function ownsOrg(user, establishmentId) {
+  return user.role === "superadmin" || establishmentId === null || establishmentId === (user.establishmentId || "");
+}
+
 // Actualizar (merge de data)
 orgRouter.patch("/records/:id", auth, async (req, res) => {
   const cur = await prisma.orgRecord.findUnique({ where: { id: req.params.id } });
   if (!cur) return res.status(404).json({ error: "Registro no encontrado." });
+  if (!ownsOrg(req.user, cur.establishmentId)) return res.status(403).json({ error: "Sin acceso a este registro." });
   const r = await prisma.orgRecord.update({ where: { id: req.params.id }, data: { data: { ...cur.data, ...(req.body.data || {}) } } });
   res.json(r);
 });
 
 // Eliminar
 orgRouter.delete("/records/:id", auth, async (req, res) => {
-  try { await prisma.orgRecord.delete({ where: { id: req.params.id } }); res.json({ ok: true }); }
-  catch { res.status(404).json({ error: "Registro no encontrado." }); }
+  const cur = await prisma.orgRecord.findUnique({ where: { id: req.params.id } });
+  if (!cur) return res.status(404).json({ error: "Registro no encontrado." });
+  if (!ownsOrg(req.user, cur.establishmentId)) return res.status(403).json({ error: "Sin acceso a este registro." });
+  await prisma.orgRecord.delete({ where: { id: req.params.id } });
+  res.json({ ok: true });
 });

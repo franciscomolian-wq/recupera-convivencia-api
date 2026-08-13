@@ -20,6 +20,16 @@ function decCase(c) {
   return c ? { ...c, relato: decrypt(c.relato) } : c;
 }
 
+// Guarda: el caso debe pertenecer al establecimiento del usuario (salvo súper admin).
+async function requireCaseScope(req, res, next) {
+  const c = await prisma.case.findUnique({ where: { id: req.params.id } });
+  if (!c) return res.status(404).json({ error: "Caso no encontrado." });
+  if (req.user.role !== "superadmin" && c.establishmentId !== (req.user.establishmentId || ""))
+    return res.status(403).json({ error: "No tienes acceso a este caso." });
+  req.caseRow = c;
+  next();
+}
+
 // Listar casos con su etapa actual
 casesRouter.get("/", auth, async (req, res) => {
   const cases = await prisma.case.findMany({ where: scopeFilter(req.user), include: CASE_INCLUDE, orderBy: { createdAt: "desc" } });
@@ -27,7 +37,7 @@ casesRouter.get("/", auth, async (req, res) => {
 });
 
 // Detalle
-casesRouter.get("/:id", auth, async (req, res) => {
+casesRouter.get("/:id", auth, requireCaseScope, async (req, res) => {
   const c = await prisma.case.findUnique({ where: { id: req.params.id }, include: CASE_INCLUDE });
   if (!c) return res.status(404).json({ error: "Caso no encontrado." });
   res.json(decCase(c));
@@ -53,7 +63,7 @@ casesRouter.post("/", auth, async (req, res) => {
 });
 
 // Cerrar caso
-casesRouter.post("/:id/close", auth, async (req, res) => {
+casesRouter.post("/:id/close", auth, requireCaseScope, async (req, res) => {
   const c = await prisma.case.update({
     where: { id: req.params.id },
     data: { closed: true, closedAt: new Date(), closeSummary: req.body?.summary || "" },
@@ -64,7 +74,7 @@ casesRouter.post("/:id/close", auth, async (req, res) => {
 });
 
 // Eliminar caso (arrastra pasos, evidencia, derivaciones y correos por cascada)
-casesRouter.delete("/:id", auth, canManage, async (req, res) => {
+casesRouter.delete("/:id", auth, canManage, requireCaseScope, async (req, res) => {
   try {
     await prisma.case.delete({ where: { id: req.params.id } });
     audit(req, "case.delete", { entity: "case", entityId: req.params.id });
@@ -75,7 +85,7 @@ casesRouter.delete("/:id", auth, canManage, async (req, res) => {
 });
 
 // Adjuntar evidencia (metadatos)
-casesRouter.post("/:id/evidence", auth, async (req, res) => {
+casesRouter.post("/:id/evidence", auth, requireCaseScope, async (req, res) => {
   const { type, name, url, stepOrder } = req.body || {};
   if (!name) return res.status(400).json({ error: "name es obligatorio." });
   const e = await prisma.evidence.create({ data: { caseId: req.params.id, type: type || "Otro", name, url: url || null, stepOrder: stepOrder ?? null } });
@@ -83,7 +93,7 @@ casesRouter.post("/:id/evidence", auth, async (req, res) => {
 });
 
 // Completar un paso (avanza la etapa actual)
-casesRouter.post("/:id/steps/:order/done", auth, async (req, res) => {
+casesRouter.post("/:id/steps/:order/done", auth, requireCaseScope, async (req, res) => {
   const order = Number(req.params.order);
   await prisma.step.updateMany({ where: { caseId: req.params.id, order }, data: { done: true } });
   const c = await prisma.case.update({
@@ -95,7 +105,7 @@ casesRouter.post("/:id/steps/:order/done", auth, async (req, res) => {
 });
 
 // Registrar una derivación
-casesRouter.post("/:id/derivations", auth, async (req, res) => {
+casesRouter.post("/:id/derivations", auth, requireCaseScope, async (req, res) => {
   const { label, email } = req.body || {};
   if (!label || !email) return res.status(400).json({ error: "label y email son obligatorios." });
   const d = await prisma.derivation.create({ data: { caseId: req.params.id, label, email } });
@@ -103,7 +113,7 @@ casesRouter.post("/:id/derivations", auth, async (req, res) => {
 });
 
 // Registrar envío de correo (log)
-casesRouter.post("/:id/emails", auth, async (req, res) => {
+casesRouter.post("/:id/emails", auth, requireCaseScope, async (req, res) => {
   const { to, subject } = req.body || {};
   const m = await prisma.emailLog.create({ data: { caseId: req.params.id, to, subject } });
   res.status(201).json(m);
