@@ -10,6 +10,7 @@
     "prisma:generate": "prisma generate",
     "db:push": "prisma db push --accept-data-loss",
     "seed": "node prisma/seed.js",
+    "test": "node --test \"tests/*.test.mjs\"",
     "postinstall": "prisma generate"
   },
   "dependencies": {
