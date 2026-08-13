@@ -11,6 +11,7 @@ import { usersRouter } from "./routes/users.js";
 import { orgRouter } from "./routes/org.js";
 import { auditRouter } from "./routes/audit.js";
 import { adminRouter } from "./routes/admin.js";
+import { protocolsRouter } from "./routes/protocols.js";
 
 const app = express();
 
@@ -41,6 +42,7 @@ app.use("/api/users", usersRouter);
 app.use("/api/org", orgRouter);
 app.use("/api/audit", auditRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/protocols", protocolsRouter);
 
 // Manejo de errores
 app.use((err, req, res, next) => {
