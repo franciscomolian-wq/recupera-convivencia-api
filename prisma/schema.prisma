@@ -14,6 +14,7 @@ datasource db {
 model Establishment {
   id           String   @id @default(cuid())
   name         String
+  rbd          String?  // Rol Base de Datos (identificador oficial MINEDUC)
   comuna       String?
   type         String   @default("basica") // parvulo | basica | media | adultos
   sostenedor   String?

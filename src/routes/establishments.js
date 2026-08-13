@@ -13,20 +13,20 @@ establishmentsRouter.get("/", auth, async (req, res) => {
 
 // Crear (solo súper admin)
 establishmentsRouter.post("/", auth, requireRole("superadmin"), async (req, res) => {
-  const { name, comuna, type, sostenedor, students, ufPerStudent } = req.body || {};
+  const { name, rbd, comuna, type, sostenedor, students, ufPerStudent } = req.body || {};
   if (!name) return res.status(400).json({ error: "El nombre es obligatorio." });
   const item = await prisma.establishment.create({
-    data: { name, comuna, type: type || "basica", sostenedor, students: students || 0, ufPerStudent: ufPerStudent ?? 0.05 },
+    data: { name, rbd: rbd || null, comuna, type: type || "basica", sostenedor, students: students || 0, ufPerStudent: ufPerStudent ?? 0.05 },
   });
   res.status(201).json(item);
 });
 
 // Actualizar (matrícula, tarifa, pago) — solo súper admin
 establishmentsRouter.patch("/:id", auth, requireRole("superadmin"), async (req, res) => {
-  const { students, ufPerStudent, paidUF, cumplimiento, name, comuna, sostenedor } = req.body || {};
+  const { students, ufPerStudent, paidUF, cumplimiento, name, rbd, comuna, sostenedor } = req.body || {};
   const item = await prisma.establishment.update({
     where: { id: req.params.id },
-    data: { students, ufPerStudent, paidUF, cumplimiento, name, comuna, sostenedor },
+    data: { students, ufPerStudent, paidUF, cumplimiento, name, rbd, comuna, sostenedor },
   });
   res.json(item);
 });
