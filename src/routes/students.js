@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
 import { auth, requireRole } from "../middleware/auth.js";
+import { audit } from "../lib/audit.js";
 
 export const studentsRouter = Router();
 const canManage = requireRole("superadmin", "coordinador", "director");
@@ -38,6 +39,7 @@ studentsRouter.post("/", auth, async (req, res) => {
   const s = await prisma.student.create({
     data: { name, curso, nivel, apoderadoNombre, apoderadoEmail, establishmentId: req.user.establishmentId || null },
   });
+  audit(req, "student.create", { entity: "student", entityId: s.id, detail: name });
   res.status(201).json(s);
 });
 
@@ -54,6 +56,7 @@ studentsRouter.delete("/:id", auth, canManage, async (req, res) => {
   if (casos > 0) return res.status(409).json({ error: "El estudiante tiene casos asociados. Elimínalos primero." });
   try {
     await prisma.student.delete({ where: { id: req.params.id } });
+    audit(req, "student.delete", { entity: "student", entityId: req.params.id });
     res.json({ ok: true });
   } catch {
     res.status(404).json({ error: "Expediente no encontrado." });

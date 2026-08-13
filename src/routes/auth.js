@@ -5,6 +5,8 @@ import QRCode from "qrcode";
 import { prisma } from "../db.js";
 import { signToken, auth } from "../middleware/auth.js";
 import { normalizeRut, isValidRut, formatRut } from "../lib/rut.js";
+import { encrypt, decrypt } from "../lib/crypto.js";
+import { audit } from "../lib/audit.js";
 
 export const authRouter = Router();
 
@@ -58,10 +60,11 @@ authRouter.post("/login", async (req, res) => {
   if (user.totpEnabled) {
     if (!token)
       return res.status(401).json({ error: "Ingresa el código de tu aplicación de autenticación.", twofa: true });
-    const valid = authenticator.verify({ token: String(token).trim(), secret: user.totpSecret });
+    const valid = authenticator.verify({ token: String(token).trim(), secret: decrypt(user.totpSecret) });
     if (!valid)
       return res.status(401).json({ error: "Código de verificación inválido.", twofa: true });
   }
+  audit({ user, headers: req.headers, socket: req.socket }, "login", { entity: "user", entityId: user.id });
   res.json({ token: signToken(user), user: publicUser(user) });
 });
 
@@ -88,6 +91,7 @@ authRouter.post("/activate", async (req, res) => {
     where: { id: user.id },
     data: { passwordHash, inviteToken: null, inviteExpires: null },
   });
+  audit({ user: updated, headers: req.headers, socket: req.socket }, "user.activate", { entity: "user", entityId: updated.id });
   res.json({ token: signToken(updated), user: publicUser(updated) });
 });
 
@@ -105,7 +109,7 @@ authRouter.post("/2fa/setup", auth, async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.user.id } });
   if (!user) return res.status(404).json({ error: "Usuario no encontrado." });
   const secret = authenticator.generateSecret();
-  await prisma.user.update({ where: { id: user.id }, data: { totpSecret: secret, totpEnabled: false } });
+  await prisma.user.update({ where: { id: user.id }, data: { totpSecret: encrypt(secret), totpEnabled: false } });
   const account = user.rut ? formatRut(user.rut) : (user.email || user.name);
   const otpauth = authenticator.keyuri(account, ISSUER, secret);
   const qr = await QRCode.toDataURL(otpauth);
@@ -118,9 +122,10 @@ authRouter.post("/2fa/enable", auth, async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.user.id } });
   if (!user || !user.totpSecret)
     return res.status(400).json({ error: "Primero genera el código de vinculación." });
-  const valid = authenticator.verify({ token: String(token || "").trim(), secret: user.totpSecret });
+  const valid = authenticator.verify({ token: String(token || "").trim(), secret: decrypt(user.totpSecret) });
   if (!valid) return res.status(400).json({ error: "Código inválido. Revisa la hora del teléfono e inténtalo de nuevo." });
   await prisma.user.update({ where: { id: user.id }, data: { totpEnabled: true } });
+  audit(req, "user.2fa_enable", { entity: "user", entityId: user.id });
   res.json({ ok: true });
 });
 
@@ -132,5 +137,6 @@ authRouter.post("/2fa/disable", auth, async (req, res) => {
   const ok = await bcrypt.compare(password || "", user.passwordHash);
   if (!ok) return res.status(401).json({ error: "Contraseña incorrecta." });
   await prisma.user.update({ where: { id: user.id }, data: { totpEnabled: false, totpSecret: null } });
+  audit(req, "user.2fa_disable", { entity: "user", entityId: user.id });
   res.json({ ok: true });
 });

@@ -8,6 +8,7 @@ import { casesRouter } from "./routes/cases.js";
 import { studentsRouter } from "./routes/students.js";
 import { usersRouter } from "./routes/users.js";
 import { orgRouter } from "./routes/org.js";
+import { auditRouter } from "./routes/audit.js";
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.use("/api/cases", casesRouter);
 app.use("/api/students", studentsRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/org", orgRouter);
+app.use("/api/audit", auditRouter);
 
 // Manejo de errores
 app.use((err, req, res, next) => {

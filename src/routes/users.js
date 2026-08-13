@@ -4,6 +4,7 @@ import { prisma } from "../db.js";
 import { auth, requireRole } from "../middleware/auth.js";
 import { normalizeRut, isValidRut, formatRut } from "../lib/rut.js";
 import { sendInviteEmail, mailerConfigured } from "../lib/mailer.js";
+import { audit } from "../lib/audit.js";
 
 export const usersRouter = Router();
 
@@ -51,6 +52,7 @@ usersRouter.post("/invite", auth, canManage, async (req, res) => {
   });
   const inviteUrl = `${APP_URL}/?invite=${inviteToken}`;
   const mail = email ? await sendInviteEmail({ to: email, name, inviteUrl }) : { sent: false, reason: "no-email" };
+  audit(req, "user.invite", { entity: "user", entityId: user.id, detail: `${name} · ${role}`, establishmentId });
   res.status(201).json({ user: publicUser(user), inviteUrl, expiresAt: inviteExpires, emailSent: mail.sent, mailerConfigured: mailerConfigured() });
 });
 
@@ -63,6 +65,7 @@ usersRouter.patch("/:id", auth, canManage, async (req, res) => {
   if (role !== undefined) data.role = role;
   try {
     const user = await prisma.user.update({ where: { id: req.params.id }, data });
+    audit(req, "user.edit", { entity: "user", entityId: user.id });
     res.json(publicUser(user));
   } catch {
     res.status(404).json({ error: "Usuario no encontrado." });
@@ -74,6 +77,7 @@ usersRouter.delete("/:id", auth, canManage, async (req, res) => {
   if (req.params.id === req.user.id) return res.status(400).json({ error: "No puedes eliminar tu propia cuenta." });
   try {
     await prisma.user.delete({ where: { id: req.params.id } });
+    audit(req, "user.delete", { entity: "user", entityId: req.params.id });
     res.json({ ok: true });
   } catch {
     res.status(404).json({ error: "Usuario no encontrado." });

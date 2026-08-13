@@ -219,6 +219,24 @@ model OrgRecord {
   createdAt       DateTime @default(now())
 }
 
+// Registro de auditoría (Ley 21.719): quién hizo qué, cuándo.
+model AuditLog {
+  id              String   @id @default(cuid())
+  at              DateTime @default(now())
+  userId          String?
+  userName        String?
+  userRole        String?
+  establishmentId String?
+  action          String   // login | case.create | case.close | user.invite | user.activate | ...
+  entity          String?  // case | student | user | record | org
+  entityId        String?
+  detail          String?
+  ip              String?
+
+  @@index([establishmentId, at])
+  @@index([action])
+}
+
 model Notification {
   id              String   @id @default(cuid())
   from            String

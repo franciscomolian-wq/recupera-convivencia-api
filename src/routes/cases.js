@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
 import { auth, requireRole } from "../middleware/auth.js";
+import { encrypt, decrypt } from "../lib/crypto.js";
+import { audit } from "../lib/audit.js";
 
 export const casesRouter = Router();
 const canManage = requireRole("superadmin", "coordinador", "director");
@@ -13,17 +15,22 @@ function scopeFilter(user) {
 
 const CASE_INCLUDE = { steps: { orderBy: { order: "asc" } }, derivations: true, evidence: true, emails: true, student: true };
 
+// Descifra el relato (dato sensible) antes de enviar al cliente.
+function decCase(c) {
+  return c ? { ...c, relato: decrypt(c.relato) } : c;
+}
+
 // Listar casos con su etapa actual
 casesRouter.get("/", auth, async (req, res) => {
   const cases = await prisma.case.findMany({ where: scopeFilter(req.user), include: CASE_INCLUDE, orderBy: { createdAt: "desc" } });
-  res.json(cases);
+  res.json(cases.map(decCase));
 });
 
 // Detalle
 casesRouter.get("/:id", auth, async (req, res) => {
   const c = await prisma.case.findUnique({ where: { id: req.params.id }, include: CASE_INCLUDE });
   if (!c) return res.status(404).json({ error: "Caso no encontrado." });
-  res.json(c);
+  res.json(decCase(c));
 });
 
 // Crear caso con sus pasos
@@ -33,7 +40,7 @@ casesRouter.post("/", auth, async (req, res) => {
     return res.status(400).json({ error: "code, typeKey y studentLabel son obligatorios." });
   const c = await prisma.case.create({
     data: {
-      code, typeKey, studentLabel, level: level || null, relato: relato || null,
+      code, typeKey, studentLabel, level: level || null, relato: relato ? encrypt(relato) : null,
       curso: curso || null, fechaHecho: fechaHecho || null, hora: hora || null, lugar: lugar || null, testigos: testigos || null, adultosRef: adultosRef || null,
       studentId: studentId || null,
       establishmentId: req.user.establishmentId || null,
@@ -41,7 +48,8 @@ casesRouter.post("/", auth, async (req, res) => {
     },
     include: CASE_INCLUDE,
   });
-  res.status(201).json(c);
+  audit(req, "case.create", { entity: "case", entityId: c.id, detail: `${code} · ${typeKey}` });
+  res.status(201).json(decCase(c));
 });
 
 // Cerrar caso
@@ -51,13 +59,15 @@ casesRouter.post("/:id/close", auth, async (req, res) => {
     data: { closed: true, closedAt: new Date(), closeSummary: req.body?.summary || "" },
     include: CASE_INCLUDE,
   });
-  res.json(c);
+  audit(req, "case.close", { entity: "case", entityId: c.id, detail: c.code });
+  res.json(decCase(c));
 });
 
 // Eliminar caso (arrastra pasos, evidencia, derivaciones y correos por cascada)
 casesRouter.delete("/:id", auth, canManage, async (req, res) => {
   try {
     await prisma.case.delete({ where: { id: req.params.id } });
+    audit(req, "case.delete", { entity: "case", entityId: req.params.id });
     res.json({ ok: true });
   } catch {
     res.status(404).json({ error: "Caso no encontrado." });
