@@ -84,6 +84,43 @@ usersRouter.delete("/:id", auth, canManage, async (req, res) => {
   }
 });
 
+// Invitación MASIVA: crea varios usuarios y envía la invitación a cada uno.
+// Body: { users: [{ name, rut, role, email }], establishmentId? }
+usersRouter.post("/bulk-invite", auth, canManage, async (req, res) => {
+  const rows = Array.isArray(req.body?.users) ? req.body.users : [];
+  if (!rows.length) return res.status(400).json({ error: "No se recibieron filas para cargar." });
+  if (rows.length > 500) return res.status(400).json({ error: "Máximo 500 usuarios por carga." });
+  const establishmentId = req.user.role === "superadmin"
+    ? (req.body.establishmentId || null)
+    : (req.user.establishmentId || null);
+
+  const results = [];
+  for (const row of rows) {
+    const name = (row?.name || "").trim();
+    const rut = (row?.rut || "").trim();
+    const role = (row?.role || "").trim();
+    const email = (row?.email || "").trim();
+    const out = { name, rut, ok: false };
+    if (!name || !rut || !role) { out.error = "Faltan datos (nombre, RUT o rol)."; results.push(out); continue; }
+    if (!isValidRut(rut)) { out.error = "RUT inválido."; results.push(out); continue; }
+    const nrut = normalizeRut(rut);
+    const exists = await prisma.user.findUnique({ where: { rut: nrut } });
+    if (exists) { out.error = "RUT ya registrado."; results.push(out); continue; }
+    try {
+      const inviteToken = crypto.randomBytes(24).toString("hex");
+      const inviteExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const user = await prisma.user.create({ data: { name, rut: nrut, email: email || null, role, establishmentId, inviteToken, inviteExpires } });
+      const inviteUrl = `${APP_URL}/?invite=${inviteToken}`;
+      const mail = email ? await sendInviteEmail({ to: email, name, inviteUrl }) : { sent: false };
+      out.ok = true; out.emailSent = !!mail.sent; out.id = user.id;
+    } catch { out.error = "No se pudo crear."; }
+    results.push(out);
+  }
+  const created = results.filter((r) => r.ok).length;
+  audit(req, "user.bulk_invite", { detail: `${created}/${rows.length} creados`, establishmentId });
+  res.json({ results, created, total: rows.length, emailsSent: results.filter((r) => r.emailSent).length, mailerConfigured: mailerConfigured() });
+});
+
 // Regenerar el enlace de invitación de un usuario aún no activado
 usersRouter.post("/:id/reinvite", auth, canManage, async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.params.id } });
