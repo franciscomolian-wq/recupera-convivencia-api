@@ -3,8 +3,10 @@ import { prisma } from "../db.js";
 import { auth, requireRole } from "../middleware/auth.js";
 import { encrypt, decrypt } from "../lib/crypto.js";
 import { audit } from "../lib/audit.js";
+import { requirePerm } from "../lib/permissions.js";
 
 export const casesRouter = Router();
+const canEditCases = requirePerm("casos", "editar");
 const canManage = requireRole("superadmin", "coordinador", "director");
 
 // Filtra por establecimiento salvo súper admin. Apoderado solo sus casos (pendiente enlazar).
@@ -44,7 +46,7 @@ casesRouter.get("/:id", auth, requireCaseScope, async (req, res) => {
 });
 
 // Crear caso con sus pasos
-casesRouter.post("/", auth, async (req, res) => {
+casesRouter.post("/", auth, canEditCases, async (req, res) => {
   const { code, typeKey, studentLabel, level, relato, curso, fechaHecho, hora, lugar, testigos, adultosRef, studentId, steps } = req.body || {};
   if (!code || !typeKey || !studentLabel)
     return res.status(400).json({ error: "code, typeKey y studentLabel son obligatorios." });
@@ -63,7 +65,7 @@ casesRouter.post("/", auth, async (req, res) => {
 });
 
 // Cerrar caso
-casesRouter.post("/:id/close", auth, requireCaseScope, async (req, res) => {
+casesRouter.post("/:id/close", auth, requireCaseScope, canEditCases, async (req, res) => {
   const c = await prisma.case.update({
     where: { id: req.params.id },
     data: { closed: true, closedAt: new Date(), closeSummary: req.body?.summary || "" },
@@ -85,7 +87,7 @@ casesRouter.delete("/:id", auth, canManage, requireCaseScope, async (req, res) =
 });
 
 // Adjuntar evidencia (metadatos)
-casesRouter.post("/:id/evidence", auth, requireCaseScope, async (req, res) => {
+casesRouter.post("/:id/evidence", auth, requireCaseScope, canEditCases, async (req, res) => {
   const { type, name, url, stepOrder } = req.body || {};
   if (!name) return res.status(400).json({ error: "name es obligatorio." });
   const e = await prisma.evidence.create({ data: { caseId: req.params.id, type: type || "Otro", name, url: url || null, stepOrder: stepOrder ?? null } });
@@ -93,7 +95,7 @@ casesRouter.post("/:id/evidence", auth, requireCaseScope, async (req, res) => {
 });
 
 // Completar un paso (avanza la etapa actual)
-casesRouter.post("/:id/steps/:order/done", auth, requireCaseScope, async (req, res) => {
+casesRouter.post("/:id/steps/:order/done", auth, requireCaseScope, canEditCases, async (req, res) => {
   const order = Number(req.params.order);
   await prisma.step.updateMany({ where: { caseId: req.params.id, order }, data: { done: true } });
   const c = await prisma.case.update({
@@ -105,7 +107,7 @@ casesRouter.post("/:id/steps/:order/done", auth, requireCaseScope, async (req, r
 });
 
 // Registrar una derivación
-casesRouter.post("/:id/derivations", auth, requireCaseScope, async (req, res) => {
+casesRouter.post("/:id/derivations", auth, requireCaseScope, canEditCases, async (req, res) => {
   const { label, email } = req.body || {};
   if (!label || !email) return res.status(400).json({ error: "label y email son obligatorios." });
   const d = await prisma.derivation.create({ data: { caseId: req.params.id, label, email } });
@@ -113,7 +115,7 @@ casesRouter.post("/:id/derivations", auth, requireCaseScope, async (req, res) =>
 });
 
 // Registrar envío de correo (log)
-casesRouter.post("/:id/emails", auth, requireCaseScope, async (req, res) => {
+casesRouter.post("/:id/emails", auth, requireCaseScope, canEditCases, async (req, res) => {
   const { to, subject } = req.body || {};
   const m = await prisma.emailLog.create({ data: { caseId: req.params.id, to, subject } });
   res.status(201).json(m);

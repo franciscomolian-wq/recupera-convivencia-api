@@ -1,4 +1,5 @@
 import { Router } from "express";
+import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { authenticator } from "otplib";
 import QRCode from "qrcode";
@@ -7,8 +8,10 @@ import { signToken, auth } from "../middleware/auth.js";
 import { normalizeRut, isValidRut, formatRut } from "../lib/rut.js";
 import { encrypt, decrypt } from "../lib/crypto.js";
 import { audit } from "../lib/audit.js";
+import { sendResetEmail } from "../lib/mailer.js";
 
 export const authRouter = Router();
+const APP_URL = process.env.APP_URL || "https://recupera-convivencia.netlify.app";
 
 // Tolerancia de ±1 ventana (30s) por desfase de reloj del celular.
 authenticator.options = { window: 1 };
@@ -93,6 +96,47 @@ authRouter.post("/activate", async (req, res) => {
   });
   audit({ user: updated, headers: req.headers, socket: req.socket }, "user.activate", { entity: "user", entityId: updated.id });
   res.json({ token: signToken(updated), user: publicUser(updated) });
+});
+
+// Solicitar recuperación de contraseña (por RUT). No revela si el RUT existe.
+authRouter.post("/forgot", async (req, res) => {
+  const { rut } = req.body || {};
+  const generic = { ok: true, message: "Si el RUT está registrado y tiene correo, te enviamos un enlace de recuperación." };
+  if (!rut) return res.json(generic);
+  try {
+    const user = await prisma.user.findUnique({ where: { rut: normalizeRut(rut) } });
+    if (user && user.email && user.passwordHash) {
+      const resetToken = crypto.randomBytes(24).toString("hex");
+      const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+      await prisma.user.update({ where: { id: user.id }, data: { resetToken, resetExpires } });
+      await sendResetEmail({ to: user.email, name: user.name, resetUrl: `${APP_URL}/?reset=${resetToken}` });
+      audit({ user, headers: req.headers, socket: req.socket }, "user.forgot_password", { entity: "user", entityId: user.id });
+    }
+  } catch (e) { console.error("forgot", e); }
+  res.json(generic); // siempre igual
+});
+
+// Restablecer contraseña con el token del enlace
+authRouter.post("/reset", async (req, res) => {
+  const { token, password } = req.body || {};
+  if (!token || !password) return res.status(400).json({ error: "Faltan datos." });
+  if (String(password).length < 8) return res.status(400).json({ error: "La contraseña debe tener al menos 8 caracteres." });
+  const user = await prisma.user.findUnique({ where: { resetToken: token } });
+  if (!user) return res.status(404).json({ error: "El enlace no es válido." });
+  if (user.resetExpires && user.resetExpires < new Date())
+    return res.status(410).json({ error: "El enlace expiró. Solicita uno nuevo." });
+  const passwordHash = await bcrypt.hash(password, 10);
+  const updated = await prisma.user.update({ where: { id: user.id }, data: { passwordHash, resetToken: null, resetExpires: null } });
+  audit({ user: updated, headers: req.headers, socket: req.socket }, "user.reset_password", { entity: "user", entityId: updated.id });
+  res.json({ token: signToken(updated), user: publicUser(updated) });
+});
+
+// Info del enlace de recuperación (para mostrar el nombre)
+authRouter.get("/reset/:token", async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { resetToken: req.params.token } });
+  if (!user) return res.status(404).json({ error: "El enlace no es válido." });
+  if (user.resetExpires && user.resetExpires < new Date()) return res.status(410).json({ error: "El enlace expiró." });
+  res.json({ name: user.name, rut: user.rut ? formatRut(user.rut) : null });
 });
 
 // Perfil del usuario autenticado (fresco desde la BD)

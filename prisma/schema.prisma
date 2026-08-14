@@ -42,6 +42,8 @@ model User {
   totpEnabled     Boolean  @default(false)
   inviteToken     String?  @unique  // token del enlace de invitación (se limpia al activar)
   inviteExpires   DateTime? // vencimiento del enlace de invitación
+  resetToken      String?  @unique  // token de recuperación de contraseña
+  resetExpires    DateTime? // vencimiento del enlace de recuperación
   establishment   Establishment? @relation(fields: [establishmentId], references: [id])
   establishmentId String?
   createdAt       DateTime @default(now())
