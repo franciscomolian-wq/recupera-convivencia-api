@@ -41,8 +41,8 @@ adminRouter.get("/backup", auth, superadmin, async (req, res) => {
     prisma.entrevista.findMany(), prisma.citacion.findMany(), prisma.compromiso.findMany(), prisma.medida.findMany(),
     prisma.studentRecord.findMany(), prisma.orgRecord.findMany(), prisma.payment.findMany(), prisma.auditLog.findMany(),
   ]);
-  // No exportamos hashes de contraseña ni secretos 2FA.
-  const safeUsers = users.map(({ passwordHash, totpSecret, ...u }) => u);
+  // No exportamos hashes de contraseña, secretos 2FA ni tokens activos.
+  const safeUsers = users.map(({ passwordHash, totpSecret, inviteToken, resetToken, ...u }) => u);
   audit(req, "admin.backup", { detail: `users:${users.length} cases:${cases.length} students:${students.length}` });
   res.setHeader("Content-Disposition", `attachment; filename="respaldo-recupera-${new Date().toISOString().slice(0, 10)}.json"`);
   res.json({
