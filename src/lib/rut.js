@@ -40,3 +40,13 @@ export function formatRut(input) {
   const withDots = body.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   return `${withDots}-${check}`;
 }
+
+// --- RBD (Rol Base de Datos MINEDUC): mismo dígito verificador módulo 11 que el RUT ---
+export const normalizeRbd = normalizeRut;
+export function isValidRbd(input) { return isValidRut(input); }
+// Formato de RBD: cuerpo-DV sin puntos (ej: "10251-2").
+export function formatRbd(input) {
+  const n = normalizeRut(input);
+  if (n.length < 2) return n;
+  return `${n.slice(0, -1)}-${n.slice(-1)}`;
+}
