@@ -101,15 +101,16 @@ model Case {
 }
 
 model Step {
-  id     String   @id @default(cuid())
-  case   Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  caseId String
-  order  Int
-  title  String
-  role   String?
-  basis  String?
-  due    DateTime?
-  done   Boolean  @default(false)
+  id           String   @id @default(cuid())
+  case         Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId       String
+  order        Int
+  title        String
+  role         String?
+  basis        String?
+  due          DateTime?
+  done         Boolean  @default(false)
+  reminderSent Boolean  @default(false) // recordatorio de plazo ya enviado
 }
 
 model Evidence {

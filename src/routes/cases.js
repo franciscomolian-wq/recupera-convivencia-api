@@ -9,9 +9,11 @@ export const casesRouter = Router();
 const canEditCases = requirePerm("casos", "editar");
 const canManage = requireRole("superadmin", "coordinador", "director");
 
-// Filtra por establecimiento salvo súper admin. Apoderado solo sus casos (pendiente enlazar).
+// Filtra por establecimiento salvo súper admin. El apoderado solo ve los casos de su pupilo/a.
 function scopeFilter(user) {
   if (user.role === "superadmin") return {};
+  if (user.role === "apoderado")
+    return { establishmentId: user.establishmentId || "", student: { apoderadoEmail: user.email || "__none__" } };
   return { establishmentId: user.establishmentId || "" };
 }
 
@@ -24,9 +26,11 @@ function decCase(c) {
 
 // Guarda: el caso debe pertenecer al establecimiento del usuario (salvo súper admin).
 async function requireCaseScope(req, res, next) {
-  const c = await prisma.case.findUnique({ where: { id: req.params.id } });
+  const c = await prisma.case.findUnique({ where: { id: req.params.id }, include: { student: true } });
   if (!c) return res.status(404).json({ error: "Caso no encontrado." });
   if (req.user.role !== "superadmin" && c.establishmentId !== (req.user.establishmentId || ""))
+    return res.status(403).json({ error: "No tienes acceso a este caso." });
+  if (req.user.role === "apoderado" && c.student?.apoderadoEmail !== (req.user.email || ""))
     return res.status(403).json({ error: "No tienes acceso a este caso." });
   req.caseRow = c;
   next();

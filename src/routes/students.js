@@ -9,7 +9,10 @@ const canManage = requireRole("superadmin", "coordinador", "director");
 const canEditExp = requirePerm("expedientes", "editar");
 
 function scope(user) {
-  return user.role === "superadmin" ? {} : { establishmentId: user.establishmentId || "" };
+  if (user.role === "superadmin") return {};
+  if (user.role === "apoderado")
+    return { establishmentId: user.establishmentId || "", apoderadoEmail: user.email || "__none__" };
+  return { establishmentId: user.establishmentId || "" };
 }
 
 const owns = (user, establishmentId) => user.role === "superadmin" || establishmentId === (user.establishmentId || "");
@@ -19,6 +22,8 @@ async function requireStudentScope(req, res, next) {
   const s = await prisma.student.findUnique({ where: { id: req.params.id } });
   if (!s) return res.status(404).json({ error: "Expediente no encontrado." });
   if (!owns(req.user, s.establishmentId)) return res.status(403).json({ error: "No tienes acceso a este expediente." });
+  if (req.user.role === "apoderado" && s.apoderadoEmail !== (req.user.email || ""))
+    return res.status(403).json({ error: "No tienes acceso a este expediente." });
   next();
 }
 

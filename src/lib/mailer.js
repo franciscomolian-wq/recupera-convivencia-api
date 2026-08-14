@@ -34,6 +34,22 @@ function inviteHtml({ name, inviteUrl }) {
   </div>`;
 }
 
+// Envío genérico (para recordatorios u otros avisos). `to` puede ser string o arreglo.
+export async function sendEmail({ to, subject, html }) {
+  if (!mailerConfigured()) return { sent: false, reason: "not-configured" };
+  const recipients = (Array.isArray(to) ? to : [to]).filter(Boolean).map((e) => ({ email: e }));
+  if (!recipients.length) return { sent: false, reason: "no-recipient" };
+  try {
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: { "api-key": BREVO_API_KEY, "Content-Type": "application/json", accept: "application/json" },
+      body: JSON.stringify({ sender: { email: SENDER_EMAIL, name: SENDER_NAME }, to: recipients, subject, htmlContent: html }),
+    });
+    if (!res.ok) { console.error("Brevo sendEmail", res.status, await res.text().catch(() => "")); return { sent: false, reason: "send-failed" }; }
+    return { sent: true };
+  } catch (e) { console.error("Brevo sendEmail ex", e); return { sent: false, reason: "exception" }; }
+}
+
 function resetHtml({ name, resetUrl }) {
   return `
   <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#3C4043">

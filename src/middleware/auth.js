@@ -4,7 +4,7 @@ const SECRET = process.env.JWT_SECRET || "dev-secret-cambiar";
 
 export function signToken(user) {
   return jwt.sign(
-    { id: user.id, role: user.role, establishmentId: user.establishmentId, name: user.name },
+    { id: user.id, role: user.role, establishmentId: user.establishmentId, name: user.name, email: user.email || null },
     SECRET,
     { expiresIn: "8h" }
   );

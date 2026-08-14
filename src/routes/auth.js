@@ -9,6 +9,7 @@ import { normalizeRut, isValidRut, formatRut } from "../lib/rut.js";
 import { encrypt, decrypt } from "../lib/crypto.js";
 import { audit } from "../lib/audit.js";
 import { sendResetEmail } from "../lib/mailer.js";
+import { blockedFor, recordFail, recordSuccess, clientIp } from "../lib/rateLimit.js";
 
 export const authRouter = Router();
 const APP_URL = process.env.APP_URL || "https://recupera-convivencia.netlify.app";
@@ -54,19 +55,36 @@ authRouter.post("/login", async (req, res) => {
   const { rut, password, token } = req.body || {};
   if (!rut || !password)
     return res.status(400).json({ error: "Ingresa tu RUT y tu contraseña." });
-  const user = await prisma.user.findUnique({ where: { rut: normalizeRut(rut) } });
-  if (!user) return res.status(401).json({ error: "Credenciales inválidas." });
+
+  // Anti fuerza bruta: bloqueo temporal por IP y por IP+RUT.
+  const ip = clientIp(req);
+  const nrut = normalizeRut(rut);
+  const ipKey = "ip:" + ip;
+  const rutKey = "ir:" + ip + ":" + nrut;
+  const wait = Math.max(blockedFor(ipKey), blockedFor(rutKey));
+  if (wait > 0) {
+    res.set("Retry-After", String(wait));
+    return res.status(429).json({ error: `Demasiados intentos fallidos. Espera ${Math.ceil(wait / 60)} minuto(s) e inténtalo de nuevo.` });
+  }
+  const fail = (msg, extra = {}) => {
+    recordFail(ipKey, 30);
+    recordFail(rutKey, 6);
+    return res.status(401).json({ error: msg, ...extra });
+  };
+
+  const user = await prisma.user.findUnique({ where: { rut: nrut } });
+  if (!user) return fail("Credenciales inválidas.");
   if (!user.passwordHash) return res.status(401).json({ error: "Esta cuenta aún no está activada. Usa el enlace de invitación que recibiste." });
   const ok = await bcrypt.compare(password, user.passwordHash);
-  if (!ok) return res.status(401).json({ error: "Credenciales inválidas." });
+  if (!ok) return fail("Credenciales inválidas.");
 
   if (user.totpEnabled) {
     if (!token)
       return res.status(401).json({ error: "Ingresa el código de tu aplicación de autenticación.", twofa: true });
     const valid = authenticator.verify({ token: String(token).trim(), secret: decrypt(user.totpSecret) });
-    if (!valid)
-      return res.status(401).json({ error: "Código de verificación inválido.", twofa: true });
+    if (!valid) return fail("Código de verificación inválido.", { twofa: true });
   }
+  recordSuccess(ipKey); recordSuccess(rutKey);
   audit({ user, headers: req.headers, socket: req.socket }, "login", { entity: "user", entityId: user.id });
   res.json({ token: signToken(user), user: publicUser(user) });
 });

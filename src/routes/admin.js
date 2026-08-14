@@ -4,9 +4,17 @@ import { auth, requireRole } from "../middleware/auth.js";
 import { audit } from "../lib/audit.js";
 import { encryptionConfigured } from "../lib/crypto.js";
 import { mailerConfigured } from "../lib/mailer.js";
+import { runDeadlineReminders } from "../lib/reminders.js";
 
 export const adminRouter = Router();
 const superadmin = requireRole("superadmin");
+
+// Disparar manualmente los recordatorios de plazos (para pruebas/operación).
+adminRouter.post("/run-reminders", auth, superadmin, async (req, res) => {
+  const sent = await runDeadlineReminders();
+  audit(req, "reminders.run", { detail: `${sent} enviados` });
+  res.json({ sent });
+});
 
 // Estado del sistema + métricas (monitoreo). Verifica conectividad de la BD.
 adminRouter.get("/status", auth, superadmin, async (req, res) => {

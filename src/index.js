@@ -52,3 +52,8 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`API escuchando en puerto ${PORT}`));
+
+// Recordatorios de plazos: una vez ~1 min tras arrancar y luego cada 24 h.
+import { runDeadlineReminders } from "./lib/reminders.js";
+setTimeout(() => runDeadlineReminders().then((n) => n && console.log(`Recordatorios enviados: ${n}`)).catch((e) => console.error("reminders", e)), 60 * 1000);
+setInterval(() => runDeadlineReminders().catch((e) => console.error("reminders", e)), 24 * 60 * 60 * 1000);
