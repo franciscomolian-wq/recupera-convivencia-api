@@ -4,10 +4,40 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+const DEFAULT_INSTITUTIONS = [
+  { id: "opd", label: "OPD / Mejor Niñez", type: "protección" },
+  { id: "tribunal", label: "Tribunal de Familia", type: "judicial" },
+  { id: "carabineros", label: "Carabineros de Chile", type: "seguridad" },
+  { id: "pdi", label: "PDI", type: "seguridad" },
+  { id: "fiscalia", label: "Fiscalía (Ministerio Público)", type: "judicial" },
+  { id: "super", label: "Superintendencia de Educación", type: "fiscalización" },
+  { id: "junji", label: "JUNJI", type: "fiscalización" },
+  { id: "senadis", label: "SENADIS", type: "protección" },
+  { id: "dt", label: "Dirección del Trabajo", type: "laboral" },
+  { id: "salud", label: "Salud / Salud mental", type: "salud" },
+  { id: "mutual", label: "Mutual de seguridad", type: "laboral" },
+  { id: "psicosocial", label: "Equipo psicosocial interno", type: "interno" },
+  { id: "senda", label: "SENDA (prevención de drogas)", type: "salud" },
+  { id: "seguroEscolar", label: "Seguro Escolar (Ley 16.744)", type: "salud" },
+  { id: "cesfam", label: "CESFAM / Hospital", type: "salud" },
+  { id: "oln", label: "Oficina Local de la Niñez (OLN)", type: "protección" },
+  { id: "defensoria", label: "Defensoría de la Niñez", type: "protección" },
+  { id: "mejorNinez", label: "Servicio Mejor Niñez", type: "protección" },
+  { id: "pjud", label: "Poder Judicial", type: "judicial" },
+  { id: "slep", label: "Servicio Local de Educación Pública (SLEP)", type: "fiscalización" },
+  { id: "municipio", label: "Municipalidad", type: "comunitaria" },
+  { id: "comunitaria", label: "Organización comunitaria", type: "comunitaria" },
+];
+
 async function main() {
   // Auto-reparación: si los usuarios demo venían de un seed anterior sin RUT, se lo asignamos.
   await prisma.user.updateMany({ where: { email: "admin@recupera.cl" }, data: { rut: "111111111" } });
   await prisma.user.updateMany({ where: { email: "coordinacion@recupera.cl" }, data: { rut: "222222222" } });
+
+  // Instituciones de derivación (siempre presentes; no se duplican).
+  for (const inst of DEFAULT_INSTITUTIONS) {
+    await prisma.institution.upsert({ where: { id: inst.id }, update: {}, create: { ...inst, email: "" } });
+  }
 
   // Idempotente: si ya existe el admin demo, no volver a sembrar el resto.
   const yaExiste = await prisma.user.findUnique({ where: { email: "admin@recupera.cl" } });
