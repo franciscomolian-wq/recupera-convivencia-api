@@ -21,7 +21,7 @@ export async function recommendProtocol({ typeLabel, nationalSteps, manualText }
   }
 
   const manual = String(manualText).slice(0, 14000);
-  const system = "Eres un asistente experto en convivencia escolar chilena y en la normativa vigente (Ley 21.809, Aula Segura 21.128, Ley Karin 21.643, Inclusión 20.845). NUNCA elimines ni debilites un paso legal. La ley es el piso mínimo obligatorio. Respondes SOLO con JSON válido, sin texto adicional.";
+  const system = "Eres un asistente experto en convivencia escolar chilena y en la normativa vigente (Ley 21.809, Aula Segura 21.128, Ley Karin 21.643, Inclusión 20.845). Estás armando el PROCEDIMIENTO DE ACTUACIÓN ante un hecho (qué hacer cuando el caso YA ocurrió): acogida, resguardo, investigación, entrevistas, notificaciones, medidas y seguimiento del caso. NO es un plan de prevención. NUNCA elimines ni debilites un paso legal; la ley es el piso mínimo obligatorio. Respondes SOLO con JSON válido, sin texto adicional.";
   const user = `Tipo de caso: ${typeLabel}
 
 Pasos legales obligatorios (base nacional — NO se pueden quitar ni acortar sus plazos):
@@ -38,8 +38,10 @@ Tarea: recomienda cómo adaptar el protocolo al manual de ESTE establecimiento, 
   "add": [ { "title": "<paso formativo o administrativo propio del manual>", "days": <numero de dias habiles, entre 0 y ${maxDays}>, "role": "<responsable>", "basis": "<referencia al articulo del RICE>", "after": <indice del paso legal tras el cual insertarlo, o -1 para el final> } ]
 }
 Reglas estrictas:
+- SOLO procedimiento de ACTUACIÓN ante el hecho. IGNORA por completo las secciones de PREVENCIÓN, promoción del buen trato, formación general, campañas, charlas, talleres preventivos, plan de gestión de la convivencia, PISE y cualquier medida que no sea una respuesta a un caso puntual. NO las incluyas en "add".
+- Del manual, usa únicamente su "protocolo de actuación / procedimiento" para este tipo de caso (responsables, plazos, medidas aplicadas a los involucrados, derivaciones, notificaciones, seguimiento del caso).
+- Los pasos de "add" solo pueden ser acciones del procedimiento (ej.: entrevista a apoderados, medida formativa o disciplinaria aplicada al o los estudiantes involucrados, derivación a la red, acompañamiento del caso, seguimiento). NUNCA actividades preventivas generales del establecimiento.
 - No inventes obligaciones legales nuevas ni denuncias que la ley no exija.
-- Los pasos de "add" solo pueden ser medidas formativas, de acompañamiento o administrativas propias del manual.
 - Ningún plazo puede superar ${maxDays} días hábiles.
 - Si el manual no aporta nada para un paso, deja "role"/"basis" vacíos en "enrich".
 Responde SOLO el JSON.`;
