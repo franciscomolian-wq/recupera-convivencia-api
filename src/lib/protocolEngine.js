@@ -12,6 +12,16 @@ export function protocolEngineConfigured() {
   return !!GROQ_API_KEY;
 }
 
+// Seudonimiza identificadores antes de enviar texto a la IA de terceros (protección de datos de NNA).
+// Quita RUT, correos y teléfonos. (Los nombres en texto libre no se pueden quitar de forma fiable:
+// la UI pide usar iniciales.)
+function redactPII(text) {
+  return String(text || "")
+    .replace(/\b\d{1,2}[.\s]?\d{3}[.\s]?\d{3}\s?[-–]?\s?[\dkK]\b/g, "[RUT]")
+    .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, "[correo]")
+    .replace(/(?:\+?56)?[\s.-]?9[\s.-]?\d{4}[\s.-]?\d{4}\b/g, "[teléfono]");
+}
+
 // Clasifica una situación descrita en texto libre en uno de los tipos de caso disponibles.
 // Devuelve { source:"ai", best:{key,label}, alternatives:[{key,label}], confidence, reason } o { source:"none" }.
 export async function analyzeCase({ relato, types }) {
@@ -21,9 +31,9 @@ export async function analyzeCase({ relato, types }) {
   const user = `Tipos de caso disponibles (clave: etiqueta):
 ${list.map((t) => `- ${t.key}: ${t.label}`).join("\n")}
 
-Situación descrita por el establecimiento:
+Situación descrita por el establecimiento (identificadores seudonimizados):
 """
-${String(relato).slice(0, 4000)}
+${redactPII(String(relato).slice(0, 4000))}
 """
 
 Devuelve un JSON con esta forma exacta:

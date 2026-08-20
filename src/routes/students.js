@@ -5,7 +5,12 @@ import { audit } from "../lib/audit.js";
 import { requirePerm, checkPerm, STUDENT_KIND_MODULE } from "../lib/permissions.js";
 import { normalizeRut } from "../lib/rut.js";
 import { sendEmail, mailerConfigured, plainHtml } from "../lib/mailer.js";
+import { encrypt, decrypt } from "../lib/crypto.js";
 import crypto from "crypto";
+
+// Cifrado de datos sensibles del expediente (entrevistas: resumen y foto).
+const decEntrevista = (e) => (e ? { ...e, resumen: e.resumen ? decrypt(e.resumen) : e.resumen, foto: e.foto ? decrypt(e.foto) : e.foto } : e);
+const decStudent = (s) => (s ? { ...s, entrevistas: (s.entrevistas || []).map(decEntrevista) } : s);
 
 const APP_URL = process.env.APP_URL || "https://app.recuperaconvivencia.cl";
 
@@ -61,14 +66,14 @@ const withRecords = {
 // Listar expedientes (con sus registros, para hidratar la UI de una vez)
 studentsRouter.get("/", auth, async (req, res) => {
   const items = await prisma.student.findMany({ where: scope(req.user), include: withRecords, orderBy: { name: "asc" } });
-  res.json(items);
+  res.json(items.map(decStudent));
 });
 
 // Detalle del expediente
 studentsRouter.get("/:id", auth, requireStudentScope, async (req, res) => {
   const s = await prisma.student.findUnique({ where: { id: req.params.id }, include: withRecords });
   if (!s) return res.status(404).json({ error: "Expediente no encontrado." });
-  res.json(s);
+  res.json(decStudent(s));
 });
 
 // Crear estudiante
@@ -147,8 +152,11 @@ studentsRouter.delete("/:id", auth, canManage, requireStudentScope, async (req, 
 
 // Agregar registros del expediente
 studentsRouter.post("/:id/entrevistas", auth, requireStudentScope, canEditExp, async (req, res) => {
-  const r = await prisma.entrevista.create({ data: { studentId: req.params.id, ...pick(req.body, ["fecha", "con", "resumen", "foto"]) } });
-  res.status(201).json(r);
+  const d = pick(req.body, ["fecha", "con", "resumen", "foto"]);
+  if (d.resumen) d.resumen = encrypt(d.resumen);
+  if (d.foto) d.foto = encrypt(d.foto);
+  const r = await prisma.entrevista.create({ data: { studentId: req.params.id, ...d } });
+  res.status(201).json(decEntrevista(r));
 });
 studentsRouter.post("/:id/citaciones", auth, requireStudentScope, canEditExp, async (req, res) => {
   const r = await prisma.citacion.create({ data: { studentId: req.params.id, ...pick(req.body, ["fecha", "motivo", "estado", "excusa"]) } });

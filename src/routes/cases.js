@@ -10,20 +10,30 @@ export const casesRouter = Router();
 const canEditCases = requirePerm("casos", "editar");
 const canManage = requireRole("superadmin", "coordinador", "director");
 
+// Confidencialidad reforzada: los casos de salud mental/riesgo vital y de vulneración
+// solo son visibles para dirección/coordinación/orientación/PIE (y el apoderado de su pupilo/a).
+const SENSITIVE_TYPES = ["situacionRiesgo", "vulneracion"];
+const SENSITIVE_ROLES = new Set(["superadmin", "director", "coordinador", "orientacion", "pie"]);
+const canSeeSensitive = (user) => user.role === "apoderado" || SENSITIVE_ROLES.has(user.role);
+
 // Filtra por establecimiento salvo súper admin. El apoderado solo ve los casos de su pupilo/a.
 function scopeFilter(user) {
   if (user.role === "superadmin") return {};
+  let where;
   if (user.role === "apoderado") {
     const email = user.email || "__none__";
-    return {
+    where = {
       establishmentId: user.establishmentId || "",
       OR: [
         { student: { apoderadoEmail: email } },
         { participants: { some: { student: { apoderadoEmail: email } } } },
       ],
     };
+  } else {
+    where = { establishmentId: user.establishmentId || "" };
   }
-  return { establishmentId: user.establishmentId || "" };
+  if (!canSeeSensitive(user)) where.typeKey = { notIn: SENSITIVE_TYPES };
+  return where;
 }
 
 const CASE_INCLUDE = {
@@ -50,6 +60,9 @@ async function requireCaseScope(req, res, next) {
     const match = c.student?.apoderadoEmail === email || (c.participants || []).some((p) => p.student?.apoderadoEmail === email);
     if (!match) return res.status(403).json({ error: "No tienes acceso a este caso." });
   }
+  // Confidencialidad reforzada por tipo de caso.
+  if (SENSITIVE_TYPES.includes(c.typeKey) && !canSeeSensitive(req.user))
+    return res.status(403).json({ error: "Este caso es reservado; no tienes permiso para verlo." });
   req.caseRow = c;
   next();
 }
@@ -142,7 +155,7 @@ casesRouter.post("/:id/evidence", auth, requireCaseScope, canEditCases, async (r
 // Completar un paso (avanza la etapa actual)
 casesRouter.post("/:id/steps/:order/done", auth, requireCaseScope, canEditCases, async (req, res) => {
   const order = Number(req.params.order);
-  await prisma.step.updateMany({ where: { caseId: req.params.id, order }, data: { done: true } });
+  await prisma.step.updateMany({ where: { caseId: req.params.id, order }, data: { done: true, doneAt: new Date() } });
   const c = await prisma.case.update({
     where: { id: req.params.id },
     data: { currentStepIdx: order + 1 },

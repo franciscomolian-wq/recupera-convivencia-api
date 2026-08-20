@@ -130,6 +130,7 @@ model Step {
   basis        String?
   due          DateTime?
   done         Boolean  @default(false)
+  doneAt       DateTime? // fecha real de completado (para la bitácora del caso)
   reminderSent Boolean  @default(false) // recordatorio de plazo ya enviado
 }
 
