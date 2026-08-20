@@ -52,8 +52,12 @@ model User {
 model Student {
   id              String   @id @default(cuid())
   name            String
+  rut             String?  // RUN del estudiante (SIGE); único por establecimiento, se valida en código
   curso           String?
   nivel           String?
+  grado           String?  // 1°, 2°, … (para el repositorio por curso)
+  letra           String?  // A, B, C, …
+  genero          String?  // M | F (nómina SIGE)
   apoderadoNombre String?
   apoderadoEmail  String?
   nee             Boolean  @default(false)  // Necesidades Educativas Especiales (PIE)
@@ -62,12 +66,13 @@ model Student {
   establishmentId String?
   createdAt       DateTime @default(now())
 
-  cases        Case[]
-  entrevistas  Entrevista[]
-  citaciones   Citacion[]
-  compromisos  Compromiso[]
-  medidas      Medida[]
-  records      StudentRecord[]
+  cases         Case[]
+  entrevistas   Entrevista[]
+  citaciones    Citacion[]
+  compromisos   Compromiso[]
+  medidas       Medida[]
+  records       StudentRecord[]
+  participations CaseParticipant[]
 }
 
 model Case {
@@ -94,10 +99,25 @@ model Case {
   establishmentId String?
   createdAt      DateTime @default(now())
 
-  steps       Step[]
-  evidence    Evidence[]
-  derivations Derivation[]
-  emails      EmailLog[]
+  steps        Step[]
+  evidence     Evidence[]
+  derivations  Derivation[]
+  emails       EmailLog[]
+  participants CaseParticipant[]
+}
+
+// Estudiantes involucrados en un caso, con su rol (afectado | involucrado | testigo).
+// Permite asociar 2 o más estudiantes a un mismo caso; el caso aparece en el expediente de cada uno.
+model CaseParticipant {
+  id        String   @id @default(cuid())
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseId    String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  role      String   @default("involucrado") // afectado | involucrado | testigo
+  createdAt DateTime @default(now())
+
+  @@unique([caseId, studentId])
 }
 
 model Step {

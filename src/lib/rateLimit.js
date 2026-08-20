@@ -24,7 +24,8 @@ export function recordFail(key, max) {
 export function recordSuccess(key) { buckets.delete(key); }
 
 export function clientIp(req) {
-  return (req.headers?.["x-forwarded-for"]?.split(",")[0] || req.socket?.remoteAddress || "unknown").trim();
+  // Con app.set("trust proxy", 1), req.ip es la IP real del cliente (no falsificable con X-Forwarded-For extra).
+  return String(req.ip || req.socket?.remoteAddress || "unknown").trim();
 }
 
 // Limpieza periódica de entradas viejas.

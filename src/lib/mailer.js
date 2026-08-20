@@ -13,6 +13,43 @@ export function mailerConfigured() {
   return !!(BREVO_API_KEY && SENDER_EMAIL);
 }
 
+// Llamada genérica a la API de Brevo (para gestionar dominios de envío, etc.).
+export async function brevoApi(method, path, body) {
+  if (!BREVO_API_KEY) return { ok: false, status: 0, data: { error: "BREVO_API_KEY no configurada" } };
+  try {
+    const res = await fetch("https://api.brevo.com/v3" + path, {
+      method,
+      headers: { "api-key": BREVO_API_KEY, "Content-Type": "application/json", accept: "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await res.text();
+    let data; try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+    return { ok: res.ok, status: res.status, data };
+  } catch (e) {
+    return { ok: false, status: 0, data: { error: String(e?.message || e) } };
+  }
+}
+
+// Escapa HTML para insertar texto plano de forma segura.
+function esc(s) {
+  return String(s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+// Envoltura de correo con la marca, para avisos de casos y derivaciones (texto plano → HTML).
+export function plainHtml({ heading, bodyText }) {
+  const body = esc(bodyText).replace(/\n/g, "<br>");
+  return `
+  <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#3C4043">
+    <div style="background:#1A73E8;color:#fff;padding:18px 24px;border-radius:12px 12px 0 0">
+      <div style="font-size:17px;font-weight:600">Recupera Convivencia</div>
+      <div style="font-size:12px;opacity:.85;letter-spacing:1px;text-transform:uppercase">${esc(heading || "Aviso")}</div>
+    </div>
+    <div style="border:1px solid #DADCE0;border-top:none;border-radius:0 0 12px 12px;padding:22px;font-size:14px;line-height:1.55">
+      ${body}
+      <p style="font-size:11px;color:#5F6368;margin-top:20px">Este correo fue enviado a través de la plataforma de convivencia escolar del establecimiento. Por favor, no respondas a esta dirección.</p>
+    </div>
+  </div>`;
+}
+
 function inviteHtml({ name, inviteUrl }) {
   return `
   <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#3C4043">
@@ -35,15 +72,18 @@ function inviteHtml({ name, inviteUrl }) {
 }
 
 // Envío genérico (para recordatorios u otros avisos). `to` puede ser string o arreglo.
-export async function sendEmail({ to, subject, html }) {
+// `attachments` (opcional): [{ content: base64, name: "archivo.json" }] para adjuntos Brevo.
+export async function sendEmail({ to, subject, html, attachments }) {
   if (!mailerConfigured()) return { sent: false, reason: "not-configured" };
   const recipients = (Array.isArray(to) ? to : [to]).filter(Boolean).map((e) => ({ email: e }));
   if (!recipients.length) return { sent: false, reason: "no-recipient" };
   try {
+    const payload = { sender: { email: SENDER_EMAIL, name: SENDER_NAME }, to: recipients, subject, htmlContent: html };
+    if (Array.isArray(attachments) && attachments.length) payload.attachment = attachments;
     const res = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: { "api-key": BREVO_API_KEY, "Content-Type": "application/json", accept: "application/json" },
-      body: JSON.stringify({ sender: { email: SENDER_EMAIL, name: SENDER_NAME }, to: recipients, subject, htmlContent: html }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) { console.error("Brevo sendEmail", res.status, await res.text().catch(() => "")); return { sent: false, reason: "send-failed" }; }
     return { sent: true };

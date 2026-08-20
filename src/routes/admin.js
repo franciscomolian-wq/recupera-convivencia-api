@@ -3,8 +3,10 @@ import { prisma } from "../db.js";
 import { auth, requireRole } from "../middleware/auth.js";
 import { audit } from "../lib/audit.js";
 import { encryptionConfigured } from "../lib/crypto.js";
-import { mailerConfigured } from "../lib/mailer.js";
+import { mailerConfigured, brevoApi } from "../lib/mailer.js";
 import { runDeadlineReminders } from "../lib/reminders.js";
+import { buildBackup } from "../lib/backup.js";
+import { runDailyBackup } from "../lib/dailyBackup.js";
 
 export const adminRouter = Router();
 const superadmin = requireRole("superadmin");
@@ -42,20 +44,47 @@ adminRouter.get("/status", auth, superadmin, async (req, res) => {
 // Respaldo lógico completo (JSON) de todos los datos. Solo súper admin.
 // El relato de los casos se exporta cifrado (requiere ENCRYPTION_KEY para restaurar).
 adminRouter.get("/backup", auth, superadmin, async (req, res) => {
-  const [establishments, users, students, cases, steps, evidence, derivations, emailLogs,
-    entrevistas, citaciones, compromisos, medidas, studentRecords, orgRecords, payments, auditLogs] = await Promise.all([
-    prisma.establishment.findMany(), prisma.user.findMany(), prisma.student.findMany(), prisma.case.findMany(),
-    prisma.step.findMany(), prisma.evidence.findMany(), prisma.derivation.findMany(), prisma.emailLog.findMany(),
-    prisma.entrevista.findMany(), prisma.citacion.findMany(), prisma.compromiso.findMany(), prisma.medida.findMany(),
-    prisma.studentRecord.findMany(), prisma.orgRecord.findMany(), prisma.payment.findMany(), prisma.auditLog.findMany(),
-  ]);
-  // No exportamos hashes de contraseña, secretos 2FA ni tokens activos.
-  const safeUsers = users.map(({ passwordHash, totpSecret, inviteToken, resetToken, ...u }) => u);
-  audit(req, "admin.backup", { detail: `users:${users.length} cases:${cases.length} students:${students.length}` });
+  const { data, counts } = await buildBackup();
+  audit(req, "admin.backup", { detail: `users:${counts.users} cases:${counts.cases} students:${counts.students}` });
   res.setHeader("Content-Disposition", `attachment; filename="respaldo-recupera-${new Date().toISOString().slice(0, 10)}.json"`);
-  res.json({
-    _meta: { generatedAt: new Date().toISOString(), version: 1, note: "Respaldo lógico. El relato de casos va cifrado; contraseñas y secretos 2FA no se exportan." },
-    establishments, users: safeUsers, students, cases, steps, evidence, derivations, emailLogs,
-    entrevistas, citaciones, compromisos, medidas, studentRecords, orgRecords, payments, auditLogs,
-  });
+  res.json(data);
+});
+
+// --- Gestión del dominio de envío en Brevo (para configurar el correo con dominio propio) ---
+// Lista los dominios de envío y su estado (verified/authenticated/dkim).
+adminRouter.get("/brevo/domains", auth, superadmin, async (req, res) => {
+  const r = await brevoApi("GET", "/senders/domains");
+  res.status(r.status || 502).json(r.data);
+});
+// Dispara la validación/autenticación (DKIM) de un dominio en Brevo.
+adminRouter.post("/brevo/authenticate", auth, superadmin, async (req, res) => {
+  const domain = req.body?.domain;
+  if (!domain) return res.status(400).json({ error: "Falta 'domain'." });
+  const r = await brevoApi("PUT", `/senders/domains/${encodeURIComponent(domain)}/authenticate`, {});
+  res.status(r.status || 502).json(r.data);
+});
+// Registra el dominio en Brevo si no existe (devuelve los registros DNS que pide).
+adminRouter.post("/brevo/domains", auth, superadmin, async (req, res) => {
+  const domain = req.body?.domain;
+  if (!domain) return res.status(400).json({ error: "Falta 'domain'." });
+  const r = await brevoApi("POST", "/senders/domains", { name: domain });
+  res.status(r.status || 502).json(r.data);
+});
+
+// Lista los modelos disponibles en Groq (para elegir/actualizar el modelo del motor de protocolos).
+adminRouter.get("/groq/models", auth, superadmin, async (req, res) => {
+  const key = process.env.GROQ_API_KEY || "";
+  if (!key) return res.status(400).json({ error: "GROQ_API_KEY no configurada" });
+  try {
+    const r = await fetch("https://api.groq.com/openai/v1/models", { headers: { Authorization: "Bearer " + key } });
+    const data = await r.json().catch(() => ({}));
+    res.status(r.status).json(data);
+  } catch (e) { res.status(502).json({ error: String(e?.message || e) }); }
+});
+
+// Disparar manualmente el respaldo diario por correo (para pruebas/operación).
+adminRouter.post("/run-backup", auth, superadmin, async (req, res) => {
+  const r = await runDailyBackup();
+  audit(req, "admin.backup.email", { detail: r.sent ? `enviado a ${(r.to || []).join(", ")}` : `no enviado: ${r.reason}` });
+  res.json(r);
 });

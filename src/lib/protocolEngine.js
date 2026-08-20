@@ -5,10 +5,47 @@
 // formativos por encima, con plazos acotados al máximo legal. Nunca elimina ni debilita.
 const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+// Groq rota sus modelos; este es válido a 2026-08 (llama-3.3 fue retirado). Override con GROQ_MODEL.
+const MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
 export function protocolEngineConfigured() {
   return !!GROQ_API_KEY;
+}
+
+// Clasifica una situación descrita en texto libre en uno de los tipos de caso disponibles.
+// Devuelve { source:"ai", best:{key,label}, alternatives:[{key,label}], confidence, reason } o { source:"none" }.
+export async function analyzeCase({ relato, types }) {
+  const list = (types || []).filter((t) => t && t.key && t.label);
+  if (!GROQ_API_KEY || !relato || !String(relato).trim() || !list.length) return { source: "none" };
+  const system = "Eres un asistente experto en convivencia escolar chilena. Clasifica la situación descrita en EXACTAMENTE uno de los tipos de caso disponibles (el que mejor calce). Responde SOLO con JSON válido, sin texto adicional.";
+  const user = `Tipos de caso disponibles (clave: etiqueta):
+${list.map((t) => `- ${t.key}: ${t.label}`).join("\n")}
+
+Situación descrita por el establecimiento:
+"""
+${String(relato).slice(0, 4000)}
+"""
+
+Devuelve un JSON con esta forma exacta:
+{ "bestKey": "<clave del tipo que mejor calza>", "alternatives": ["<clave alternativa>", "<clave alternativa>"], "confidence": "alta" | "media" | "baja", "reason": "<una frase breve, en español, explicando por qué>" }
+Reglas: "bestKey" y las "alternatives" DEBEN ser claves exactas de la lista anterior. Máximo 2 alternativas. No inventes claves. Si no hay calce claro, usa la más cercana y confidence "baja".`;
+  try {
+    const res = await fetch(GROQ_URL, {
+      method: "POST",
+      headers: { Authorization: "Bearer " + GROQ_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: MODEL, temperature: 0.1, response_format: { type: "json_object" }, messages: [{ role: "system", content: system }, { role: "user", content: user }] }),
+    });
+    if (!res.ok) { console.error("Groq analyze", res.status, await res.text().catch(() => "")); return { source: "none", error: "ai-failed" }; }
+    const data = await res.json();
+    const parsed = JSON.parse(data.choices?.[0]?.message?.content || "{}");
+    const byKey = Object.fromEntries(list.map((t) => [t.key, t.label]));
+    const valid = new Set(list.map((t) => t.key));
+    const bestKey = valid.has(parsed.bestKey) ? parsed.bestKey : null;
+    if (!bestKey) return { source: "none" };
+    const alternatives = (parsed.alternatives || []).filter((k) => valid.has(k) && k !== bestKey).slice(0, 2).map((k) => ({ key: k, label: byKey[k] }));
+    const confidence = ["alta", "media", "baja"].includes(parsed.confidence) ? parsed.confidence : "media";
+    return { source: "ai", best: { key: bestKey, label: byKey[bestKey] }, alternatives, confidence, reason: String(parsed.reason || "").slice(0, 240) };
+  } catch (e) { console.error("analyzeCase", e); return { source: "none", error: "exception" }; }
 }
 
 export async function recommendProtocol({ typeLabel, nationalSteps, manualText }) {

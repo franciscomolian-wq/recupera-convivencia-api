@@ -4,13 +4,13 @@ import { prisma } from "../db.js";
 
 const ROLE_SCOPE = {
   superadmin: "superadmin", coordinador: "admin", inspectoria: "admin",
-  director: "audit", sostenedor: "audit", superintendencia: "audit",
+  director: "admin", sostenedor: "audit", superintendencia: "audit",
   pie: "limited", orientacion: "limited", utp: "limited",
   profesorJefe: "limited", docente: "limited", asistente: "limited",
   apoderado: "family",
 };
-const AUDIT_KEYS = new Set(["alertas", "casos", "expedientes", "inspectoria", "pie", "agenda", "apoderados", "documental", "reportes", "planpme", "gestion", "normativa", "redes"]);
-const LIMITED_KEYS = new Set(["casos", "expedientes", "pie", "agenda", "comunicacion", "apoderados", "documental", "planpme", "formatos", "normativa"]);
+const AUDIT_KEYS = new Set(["alertas", "casos", "expedientes", "inspectoria", "pie", "agenda", "apoderados", "documental", "reportes", "planpme", "gestion", "normativa", "redes", "reconocimientos"]);
+const LIMITED_KEYS = new Set(["casos", "expedientes", "pie", "agenda", "comunicacion", "apoderados", "documental", "planpme", "formatos", "normativa", "reconocimientos"]);
 const RANK = { "": 0, ver: 1, editar: 2 };
 
 export function defaultLevel(roleKey, mk) {
@@ -55,6 +55,7 @@ export const STUDENT_KIND_MODULE = {
   anotacion: "inspectoria", suspension: "inspectoria", atraso: "inspectoria", retiro: "inspectoria",
   pieInforme: "pie", pieAdecuacion: "pie", pieEstrategia: "pie", pieReunion: "pie",
   citacionApo: "apoderados", acuerdoApo: "apoderados", docApo: "apoderados",
+  reconocimiento: "reconocimientos",
 };
 export const ORG_KIND_MODULE = {
   message: "comunicacion", event: "agenda", gestion: "gestion", document: "documental", accion: "planpme", protocol: "protocolos",

@@ -30,25 +30,10 @@ function publicUser(u) {
   };
 }
 
-// Registro (en producción, restringir a superadmin/coordinador)
-authRouter.post("/register", async (req, res) => {
-  const { name, rut, email, password, role, establishmentId } = req.body || {};
-  if (!name || !rut || !password)
-    return res.status(400).json({ error: "Nombre, RUT y contraseña son obligatorios." });
-  if (!isValidRut(rut))
-    return res.status(400).json({ error: "El RUT ingresado no es válido." });
-  const nrut = normalizeRut(rut);
-  const exists = await prisma.user.findUnique({ where: { rut: nrut } });
-  if (exists) return res.status(409).json({ error: "Ese RUT ya está registrado." });
-  const passwordHash = await bcrypt.hash(password, 10);
-  const user = await prisma.user.create({
-    data: {
-      name, rut: nrut, email: email || null, passwordHash,
-      role: role || "docente", establishmentId: establishmentId || null,
-    },
-  });
-  res.status(201).json({ token: signToken(user), user: publicUser(user) });
-});
+// NOTA DE SEGURIDAD: el endpoint público POST /register fue ELIMINADO (2026-08-20).
+// Permitía a cualquier anónimo crearse una cuenta con role="superadmin" y acceder a
+// todos los establecimientos y estudiantes. La creación de usuarios se hace SOLO por el
+// flujo de invitación (POST /api/users/invite → /api/auth/activate), con control de rol y acceso.
 
 // Login por RUT + contraseña (+ código 2FA si está activado)
 authRouter.post("/login", async (req, res) => {

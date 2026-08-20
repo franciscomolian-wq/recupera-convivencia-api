@@ -7,7 +7,7 @@ export const orgRouter = Router();
 
 // Permiso para operar un registro según su tipo (kind).
 async function canEditOrgKind(user, kind) {
-  if (kind === "permset") return ["superadmin", "coordinador", "director"].includes(user.role);
+  if (kind === "permset" || kind === "reconCategory") return ["superadmin", "coordinador", "director"].includes(user.role);
   const mod = ORG_KIND_MODULE[kind];
   if (!mod) return true; // tipos sin módulo mapeado no se bloquean
   return checkPerm(user, mod, "editar");
